@@ -57,7 +57,7 @@ enum cStateScany
 //------------------------------------------------------------------------------
 // GENERAL VARIABLES
 //------------------------------------------------------------------------------
-//some comment i added to check git 
+
 //variables for gradient:
 
 bool enable_magnet_Z = false;
@@ -595,7 +595,7 @@ int main(int argc, char* argv[])
         robotDevice = device1;
         hapticDevice = device0;
     }
- 
+    cout<
     // open connection to robot device
     robotDevice->open();
 

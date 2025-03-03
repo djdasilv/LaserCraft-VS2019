@@ -3,7 +3,7 @@
 //  SCOPE
 //
 //==============================================================================
-//Also some comment to verify with git
+
 #include "chai3d.h"
 #include "cbw.h"
 #include <GLFW/glfw3.h>
