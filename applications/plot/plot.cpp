@@ -147,6 +147,9 @@ bool flagMarkVolumeForUpdate = false;
 // a scope to monitor position values of haptic device
 cScope* scope;
 
+// a label for the scope
+cLabel* legend;
+
 // a handle to window display context
 GLFWwindow* window = NULL;
 
@@ -362,6 +365,12 @@ int main(int argc, char* argv[])
     scope->setRange(0.0, 5.0);
     scope->setSignalEnabled(true, false, false, false);
     scope->setTransparencyLevel(0.7);
+    
+    //Adds a label to the scope to know range of voltage measurements
+    legend = new cLabel(font);
+    legend->setText("Received signal from 0 to 5[V] ");
+    legend->setLocalPos(100, 60);
+    camera->m_frontLayer->addChild(legend);
 
 
     //--------------------------------------------------------------------------
@@ -589,7 +598,8 @@ void windowSizeCallback(GLFWwindow* a_window, int a_width, int a_height)
     height = a_height;
 
     // update position of scope
-    scope->setSize(width - 200, 70);
+    //scope->setSize(width - 200, 70);
+    legend->setLocalPos(100, 60);
 }
 
 //------------------------------------------------------------------------------
@@ -831,7 +841,7 @@ void updateSensor(void)
     //         DONTSTOP :program will continue even if error occurs.
     //                  Note that STOPALL and STOPFATAL are only effective in
     //                  Windows applications, not Console applications.
-    cbErrHandling(PRINTALL, DONTSTOP);
+    //cbErrHandling(PRINTALL, DONTSTOP);
 
     // Get the resolution of A/D
     cbGetConfig(BOARDINFO, BoardNum, 0, BIADRES, &ADRes);
