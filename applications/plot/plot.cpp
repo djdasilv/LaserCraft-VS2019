@@ -234,7 +234,7 @@ int width = 0;
 // current height of window
 int height = 0;
 
-
+ofstream* outAdress;
 
 //------------------------------------------------------------------------------
 // DECLARED FUNCTIONS
@@ -267,8 +267,6 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 // this function closes the application
 void close(void);
 
-ofstream outFile("output.txt");
-
 //==============================================================================
 /*
     DEMO:   plot.cpp
@@ -282,6 +280,8 @@ ofstream outFile("output.txt");
     A 3D volume image is used to render laser sensor data.
 */
 //==============================================================================
+
+ofstream outFile;
 
 int main(int argc, char* argv[])
 {
@@ -740,14 +740,20 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     if (a_key == GLFW_KEY_G)
     {
         
-        ifstream is;
-        filebuf* fb = is.rdbuf();
-        if (enable_magnet_Z) {
-     
-            cout << "Data written to output.txt successfully." << std::endl;
+        if (!enable_magnet_Z) {
+            outFile.open("output.csv", std::ios::trunc);
+            //outFile.open("output.csv", std::ios::app);
+            if (outFile.is_open()) {
+                outFile << "Position in z [a.u.],Voltage [V]"  << std::endl;
+                std::cout << "Data appended to output.csv successfully." << std::endl;
+            }
+            else cout << "Error opening file." << std::endl;
         }
-        else cout << "Data not written" << std::endl;
-        
+        else
+        {
+            outFile.close();
+            cout << "Data written and doc closed" << std::endl;
+        }
 
         
 
@@ -787,7 +793,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     // option - scale factor 0.005
     if ((a_key == GLFW_KEY_0) && (state == STATE_IDLE))
     {
-        scaleFactor = 0.005;
+        scaleFactor = 0.001;
     }
 
 
@@ -898,7 +904,7 @@ void updateGraphics(void)
         "Sensor: " + cStr(freqCounterSensor.getFrequency(), 0) + " Hz  /  " +
         "Haptic Device: " + cStr(freqCounterHapticDevice.getFrequency(), 0) + " Hz  /  " +
         "Robot Device: " + cStr(freqCounterRobotDevice.getFrequency(), 0) + " Hz  /  " +
-        "Scale Factor: " + cStr(scaleFactor, 2) + "x");
+        "Scale Factor: " + cStr(scaleFactor, 4) + "x");
 
     // update position of label
     labelMessage->setLocalPos((int)(0.5 * (width - labelMessage->getWidth())), 15);
@@ -1688,50 +1694,51 @@ void updateHapticDevice(void)
                 //hapticPosPlan0 = hapticPos;
                 //enable_magnet_Z = false;
                // plan_xy = true;
-         
-            outFile << " Voltage: " << voltageLevel;
-            outFile << " Position: " << hapticPos.z() << std::endl;
+            static int i = 0;
+            if (i % 1000 == 0) {
+                cVector3d robotPosition;
+                robotDevice->getPosition(robotPosition);
+                outFile << robotPosition.z() << "," << voltageLevel  << std::endl;
+                i = 0;
+            }
+            i++;
+        
             
-     
-            //}
+             //write code for spring force here : 
+             cVector3d springforce;
+             double forcex;
+             double forcey;
+             double forcez;
+             double Kp = 2000; // définir coefficent approprié. 
+             double Kv = 5;
 
-            //else
-            //{
-                //write code for spring force here : 
-                cVector3d springforce;
-                double forcex;
-                double forcey;
-                double forcez;
-                double Kp = 2000; // définir coefficent approprié. 
-                double Kv = 5;
+             // calcul of the spring force that need to be applied to the haptic device
+             forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
+             forcey = Kp * (hapticPosGrad0.y() - hapticPos.y()) - Kv * hapticVel.y();
+             forcez = 0.0;
 
-                // calcul of the spring force that need to be applied to the haptic device
-                forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
-                forcey = Kp * (hapticPosGrad0.y() - hapticPos.y()) - Kv * hapticVel.y();
-                forcez = 0.0;
-
-                // set spring force vector
-                springforce.set(forcex, forcey, forcez);//applying force to the haptic device
+             // set spring force vector
+             springforce.set(forcex, forcey, forcez);//applying force to the haptic device
 
 
 
-                // add spring force to final force
-                force = force + springforce;
+             // add spring force to final force
+             force = force + springforce;
 
 
 
-                // compute a haptic damping factor based on laser signal
-                double dampingGain = 0.2;
-                hapticDampingFactor = dampingGain * voltageLevel;
-
-        //    }
+             // compute a haptic damping factor based on laser signal
+             double dampingGain = 0.2;
+             hapticDampingFactor = dampingGain * voltageLevel;
+                
+            
+        
 
 
         }
 
         
-        /**
-        
+                
         /// <param name=""></param>
         if (plan_xy == true)
         {
@@ -1741,7 +1748,7 @@ void updateHapticDevice(void)
             double forcez;
             double Kp_factor;
 
-            Kp_factor = voltageLevel * 500; // définir coefficent approprié. (max signal = 2V (23.08.23) & max Kp =1000 -> coeff = 500
+            Kp_factor = voltageLevel * 10000; // définir coefficent approprié. (max signal = 2V (23.08.23) & max Kp =1000 -> coeff = 500
             double Kv = 5;
             double Kp = cClamp(Kp_factor, 0.0, 1000.0);//mettre dépendance k à l'intensité
             //hapticPosPlan0 = PosMax;
@@ -1757,7 +1764,7 @@ void updateHapticDevice(void)
             force = force + springforce;
 
         }
-        */
+  
 
 
 
