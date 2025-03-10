@@ -10,9 +10,15 @@
     <ClInclude Include="..\..\external\mcc\include\cbw.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="imaging.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="plot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="imaging.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

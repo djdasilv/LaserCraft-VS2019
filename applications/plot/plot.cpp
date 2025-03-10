@@ -7,6 +7,7 @@
 #include "chai3d.h"
 #include "cbw.h"
 #include <GLFW/glfw3.h>
+#include "imaging.h"
 
 using namespace chai3d;
 using namespace std;
@@ -150,6 +151,9 @@ cScope* scope;
 // a label for the scope
 cLabel* legend;
 
+// a label for the scope
+cLabel* inside;
+
 // a handle to window display context
 GLFWwindow* window = NULL;
 
@@ -159,7 +163,8 @@ int width = 0;
 // current height of window
 int height = 0;
 
-
+// voltage received by the ac/dc
+double voltageLev;
 
 //------------------------------------------------------------------------------
 // DECLARED FUNCTIONS
@@ -191,6 +196,14 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 
 // this function closes the application
 void close(void);
+
+
+//------------------------------------------------------------------------------
+// BUNCH OF GLOBAL VARIABLES AND FUNCTION DEFINITIONS THAT COULD BE PLACED ELSEWHERE
+// BUT FOR SIMPLICITY WHILE CODING, I PUT IT HERE
+//------------------------------------------------------------------------------
+
+
 
 
 //==============================================================================
@@ -226,6 +239,7 @@ int main(int argc, char* argv[])
     cout << "[4] - scale factor 0.50x" << endl;
     cout << "[c] - reset offset" << endl;
     cout << "[f] - Enable/Disable full screen mode" << endl;
+    cout << "[r] - Invert bulk and structure haptic feedback" << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
 
@@ -362,16 +376,19 @@ int main(int argc, char* argv[])
     scope = new cScope();
     camera->m_frontLayer->addChild(scope);
     scope->setLocalPos(100, 60);
-    scope->setRange(0.0, 5.0);
+    scope->setRange(0.0, 5);
     scope->setSignalEnabled(true, false, false, false);
     scope->setTransparencyLevel(0.7);
     
     //Adds a label to the scope to know range of voltage measurements
     legend = new cLabel(font);
-    legend->setText("Received signal from 0 to 5[V] ");
-    legend->setLocalPos(100, 60);
+    legend->setLocalPos(110, 60);
     camera->m_frontLayer->addChild(legend);
 
+    //Adds a label to the scope to know range of voltage measurements
+    inside = new cLabel(font);
+    inside->setLocalPos(160, 50);
+    camera->m_frontLayer->addChild(legend);
 
     //--------------------------------------------------------------------------
     // CREATE DEVICE SPHERE
@@ -599,7 +616,7 @@ void windowSizeCallback(GLFWwindow* a_window, int a_width, int a_height)
 
     // update position of scope
     scope->setSize(width - 200, 70);
-    legend->setLocalPos(100, 60);
+    legend->setLocalPos(110, 60);
 }
 
 //------------------------------------------------------------------------------
@@ -618,7 +635,10 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     {
         return;
     }
-
+    //  invert current bulk and strucure
+    if (a_key == GLFW_KEY_R) {
+        setInside(!getInside());
+    }
     // option - exit
     if ((a_key == GLFW_KEY_ESCAPE) || (a_key == GLFW_KEY_Q))
     {
@@ -716,14 +736,24 @@ void updateGraphics(void)
     /////////////////////////////////////////////////////////////////////
     // UPDATE WIDGETS
     /////////////////////////////////////////////////////////////////////
-
+    //Update inside or outside according to state
+    static string location = "Inside";
+    if (getInside()) location = "Inside";
+    else location = "Outside";
     // update status message
     labelMessage->setText("Graphics: " + cStr(freqCounterGraphics.getFrequency(), 0) + " Hz  /  " +
-                          "Sensor: " + cStr(freqCounterSensor.getFrequency(), 0) + " Hz  /  " +
-                          "Haptic Device: " + cStr(freqCounterHapticDevice.getFrequency(), 0) + " Hz  /  " +
-                          "Robot Device: " + cStr(freqCounterRobotDevice.getFrequency(), 0) + " Hz  /  " +
-                          "Scale Factor: " + cStr(scaleFactor,2) + "x");
-
+        "Sensor: " + cStr(freqCounterSensor.getFrequency(), 0) + " Hz  /  " +
+        "Haptic Device: " + cStr(freqCounterHapticDevice.getFrequency(), 0) + " Hz  /  " +
+        "Robot Device: " + cStr(freqCounterRobotDevice.getFrequency(), 0) + " Hz  /  " +
+        "Scale Factor: " + cStr(scaleFactor, 2) + "x / " +
+        "Location: " + location);
+ 
+    static int i = 0;
+    i += 1;
+    if (i == 100) {
+        legend->setText("Received signal from 0 to 5[V] - Current value: " + cStr(voltageLev));
+        i = 0;
+    }
     // update position of label
     labelMessage->setLocalPos((int)(0.5 * (width - labelMessage->getWidth())), 15);
 
@@ -928,7 +958,7 @@ void updateSensor(void)
 
             // convert data value to a sensor voltage level
             double voltageLevel = 5.0 * (((double)(dataValue)-2048.0) / 964.0);
-
+            voltageLev = voltageLevel;
             // compute a haptic damping factor based on laser signal
             double dampingGain = 0.2;
             hapticDampingFactor = dampingGain * voltageLevel;
