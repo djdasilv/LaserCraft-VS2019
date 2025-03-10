@@ -10,6 +10,8 @@
 #include <cmath>
 #include <chrono>
 #include <thread>
+#include <iostream>
+#include <fstream>
 
 using namespace chai3d;
 using namespace std;
@@ -265,6 +267,7 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 // this function closes the application
 void close(void);
 
+ofstream outFile("output.txt");
 
 //==============================================================================
 /*
@@ -595,7 +598,6 @@ int main(int argc, char* argv[])
         robotDevice = device1;
         hapticDevice = device0;
     }
-    cout<
     // open connection to robot device
     robotDevice->open();
 
@@ -737,8 +739,22 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     //option - activation of the gradient approach
     if (a_key == GLFW_KEY_G)
     {
+        
+        ifstream is;
+        filebuf* fb = is.rdbuf();
+        if (enable_magnet_Z) {
+     
+            cout << "Data written to output.txt successfully." << std::endl;
+        }
+        else cout << "Data not written" << std::endl;
+        
+
+        
+
         enable_magnet_Z = !enable_magnet_Z;
         hapticDevice->getPosition(hapticPosGrad0);
+     
+        
 
     }
 
@@ -1544,6 +1560,7 @@ void updateRobotDevice(void)
 
 //------------------------------------------------------------------------------
 
+
 void updateHapticDevice(void)
 {
     // variable to store robot device position when user button is pressed
@@ -1666,17 +1683,20 @@ void updateHapticDevice(void)
         {
 
             //threshold to block the robot on the xyplane 
-            if (voltageLevel > intensityThreshold)
-            {
-                hapticPosPlan0 = hapticPos;
-                enable_magnet_Z = false;
-                plan_xy = true;
+           // if (voltageLevel > intensityThreshold)
+            //{
+                //hapticPosPlan0 = hapticPos;
+                //enable_magnet_Z = false;
+               // plan_xy = true;
+         
+            outFile << " Voltage: " << voltageLevel;
+            outFile << " Position: " << hapticPos.z() << std::endl;
+            
+     
+            //}
 
-
-            }
-
-            else
-            {
+            //else
+            //{
                 //write code for spring force here : 
                 cVector3d springforce;
                 double forcex;
@@ -1704,12 +1724,15 @@ void updateHapticDevice(void)
                 double dampingGain = 0.2;
                 hapticDampingFactor = dampingGain * voltageLevel;
 
-            }
+        //    }
 
 
         }
 
-
+        
+        /**
+        
+        /// <param name=""></param>
         if (plan_xy == true)
         {
             cVector3d springforce;
@@ -1734,6 +1757,7 @@ void updateHapticDevice(void)
             force = force + springforce;
 
         }
+        */
 
 
 
