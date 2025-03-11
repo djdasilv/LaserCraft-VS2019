@@ -864,12 +864,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
 
     if (a_key == GLFW_KEY_S)
     {
-        float temp_treshold;
-        cout << "What is the maximum obtaind voltage i your setup & sample? Type a int or float number." << endl;
-        cin >> temp_treshold;
-        cout << "You typed: " << temp_treshold << "V if its incorrect, pleas press S again." << endl;
-
-        threshold = temp_treshold;
+        cout << "This fonction currently does not do anything" << endl;
+        
     }
 }
 
