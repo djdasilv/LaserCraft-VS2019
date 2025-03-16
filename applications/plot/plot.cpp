@@ -12,6 +12,7 @@
 #include <thread>
 #include <iostream>
 #include <fstream>
+#include "Data_process.h"
 
 using namespace chai3d;
 using namespace std;
@@ -70,8 +71,9 @@ cVector3d P1;
 double P1z;
 cVector3d P2;
 double P2z;
-double I1;
-double I2;
+
+
+cVector3d voltageGradient;
 
 cVector3d forceGradient;
 cVector3d hapticPosGrad0;// position enregistrée quand le mode approach est activé.
@@ -89,6 +91,7 @@ bool plan_xy = false;
 cVector3d hapticPosPlan0; // position enregistrée quand le mode plan est activée
 
 double voltageLevel;
+bool is_in_bulk = true;
 // a flag to indicate if the simulation currently running
 bool simulationRunning = false;
 
@@ -282,6 +285,7 @@ void close(void);
 //==============================================================================
 
 ofstream outFile;
+bool reverseMode=false;
 
 int main(int argc, char* argv[])
 {
@@ -307,7 +311,7 @@ int main(int argc, char* argv[])
     cout << "[v] - Enable XY vibration" << endl;
     cout << "[p] - Enable XY plan" << endl;
     cout << "[a] - Enable automatic scan" << endl;
-    cout << "[T] - Test automatic code Mina" << endl;
+    cout << "[r] - Inverse bulk and structure haptic" << endl;
     cout << "[S] - Set new maximum obtained voltage [V]. Default set to 2 V." << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
@@ -702,7 +706,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
 {
     if (a_key == GLFW_KEY_T)
     {
-        StateMode = STATE_AUTO_M;
+        //StateMode = STATE_AUTO_M;
+        reverseMode = true;
     }
 
     //option - activation of the scanning mode
@@ -736,13 +741,12 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         return;
     }
 
-    //option - activation of the gradient approach
+    //option - activation of the z-axis only approach
     if (a_key == GLFW_KEY_G)
     {
         
         if (!enable_magnet_Z) {
             outFile.open("output.csv", std::ios::trunc);
-            //outFile.open("output.csv", std::ios::app);
             if (outFile.is_open()) {
                 outFile << "Position in z [a.u.],Voltage [V]"  << std::endl;
                 std::cout << "Data appended to output.csv successfully." << std::endl;
@@ -1120,18 +1124,25 @@ void updateSensor(void)
             {
                 dataValue = ADData[i];
             }
-
+            
             // convert data value to a sensor voltage level
             voltageLevel = 5.0 * (((double)(dataValue)-2048.0) / 964.0);
+            
+            //Apply a gaussian filter to smoothen sensor values
+            static GaussianFilter filter;
+            voltageLevel= filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
-            double dampingGain = 0.2;
-            hapticDampingFactor = dampingGain * voltageLevel;
-
+            double dampingGain = 0.4;
+            if (reverseMode == false) {
+                hapticDampingFactor = dampingGain * voltageLevel;
+            }
+            else {
+                hapticDampingFactor = dampingGain * voltageLevel;
+            }
             // display data to scope
             scope->setSignalValues(voltageLevel);
 
-            // draw a voxel if voltage level reaches a certain value
            // draw a voxel if voltage level reaches a certain value
             if (voltageLevel > threshold * 0.1)
             {
@@ -1181,7 +1192,6 @@ void updateSensor(void)
                 color.setB(122);
                 setVoxel(robotPosCur - offset, color);
             }
-
             if (voltageLevel > threshold * 0.9)
             {
                 cColorb color;
@@ -1199,23 +1209,38 @@ void updateSensor(void)
                 setVoxel(robotPosCur - offset, color);
             }
 
-            //compute gradient along Z axis:
+
+            //compute gradient along direction of travel:
+            double intensityAtPoint1;
+            double intensityAtPoint2;
             if (stateGradient == STATE_AQUIREPOINT1)
             {
 
-                I1 = voltageLevel;//save voltage intensity at the current position of the robot
+                intensityAtPoint1 = voltageLevel;//save voltage intensity at the current position of the robot
                 robotDevice->getPosition(P1); //save current position of the robot
                 stateGradient = STATE_AQUIREPOINT2;
+             
+
             }
             else if (stateGradient == STATE_AQUIREPOINT2)
-            {
-                double diffz;
+            {   
+                
+                cVector3d deltaVector;
                 robotDevice->getPosition(P2);//save current position of the robot
-                diffz = P2.z() - P1.z();// calcul of the displacement in z-axis
-                if (abs(diffz) > deltaz)// check if the displacement in z-axis is big enough to calulate a gradient 
+                deltaVector= P2 - P1;// calcul of the displacement in z-axis
+
+                if (deltaVector.length() > deltaz)// check if the displacement in z-axis is big enough to calulate a gradient 
                 {
-                    I2 = voltageLevel;
-                    gradient = (I1 - I2) / diffz;//calculate the gradient
+                    intensityAtPoint2 = voltageLevel;
+                    float gradX, gradY, gradZ;
+                    if (deltaVector.x() > deltaz)  gradX = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.x());
+                    else gradX = 0;
+                    if (deltaVector.y() > deltaz)  gradY = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.y());
+                    else gradY = 0;
+                    if (deltaVector.z() > deltaz)  gradZ = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.z());
+                    else gradZ = 0;
+                    cVector3d temp(gradX, gradY , gradZ);
+                    voltageGradient = temp; //calculate the gradient
                     //gradientData.push_back(gradient);
                     stateGradient = STATE_AQUIREPOINT1;
                 }
@@ -1691,10 +1716,12 @@ void updateHapticDevice(void)
                 //enable_magnet_Z = false;
                // plan_xy = true;
             static int i = 0;
-            if (i % 1000 == 0) {
+            if (i % 100 == 0) {
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
-                outFile << robotPosition.z() << "," << voltageLevel  << std::endl;
+                outFile << robotPosition.z() << "," << robotPosCur.z() << "," << voltageLevel << endl;
+                //outFile << rand()<<"," << rand()<<endl;
+                outFile.flush();
                 i = 0;
             }
             i++;

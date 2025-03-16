@@ -20,8 +20,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\external\mcc\include\cbw.h" />
+    <ClInclude Include="Data_process.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Data_process.cpp" />
     <ClCompile Include="plot.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
