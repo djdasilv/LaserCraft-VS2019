@@ -25,5 +25,5 @@ public:
     double applyFilter(double new_measurement);
 };
 
-bool find_focus(cVector3d position,double voltag, cVector3d& maxPose) ;
+double updateMax(cVector3d position,double voltage)) ;
 

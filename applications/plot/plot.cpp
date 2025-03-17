@@ -285,6 +285,7 @@ bool lock_y = false;
 bool lock_x = false;
 bool lock_z = false;
 cVector3d posX, posY, posZ;
+double maxSignal;
 
 int main(int argc, char* argv[])
 {
@@ -753,7 +754,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         return;
     }
 
-    //option - activation of the z-axis only approach
+    //option - approaches sample on z-axis and writes output signal to file
+    //Warning: old file is written over each time this mode is activated
     if (a_key == GLFW_KEY_G)
     {
         
@@ -1457,9 +1459,10 @@ void updateHapticDevice(void)
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
                 outFile << robotPosition.z() << "," << voltageLevel << endl;
-                //outFile << rand()<<"," << rand()<<endl;
                 outFile.flush();
+                maxSignal=updateMax(robotPosition, voltageLevel);
                 i = 0;
+
             }
             i++;
   
@@ -1468,22 +1471,11 @@ void updateHapticDevice(void)
              hapticDampingFactor = dampingGain * voltageLevel;
                 
             //find the focus plane
-             static bool focus = false;
-             if (focus == false) {
-                 cVector3d maxPos;
-                 cVector3d z_vector(0.000000, 0, 0.0000001);
-                 robotPosDes = robotPosDes + z_vector;
-                 cVector3d robotPosition;
-                 robotDevice->getPosition(robotPosition);
-                 focus = find_focus(robotPosition,voltageLevel,maxPos);
-                 //cout << focus << endl;
-                 if (focus && robotPosDes.length() - maxPos.length() < 0.000001) {
-                     robotPosDes = maxPos;
-                 }
-             }
-        
-
-
+            cVector3d maxPos;
+            cVector3d z_vector(0.000000, 0, 0.0000001);
+            robotPosDes = robotPosDes + z_vector;
+            cVector3d robotPosition;
+            robotDevice->getPosition(robotPosition)   
         }
 
         // Compute the force to lock haptic in x,y or z direction according to which variable is set to true

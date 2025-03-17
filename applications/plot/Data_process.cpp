@@ -34,43 +34,19 @@ double GaussianFilter::applyFilter(double new_measurement) {
     return filtered_value;
 }
 
-bool find_focus(cVector3d position, double voltage, cVector3d& maxPos){
+double updateMax(cVector3d position, double voltage) {
     static std::deque<cVector3d> lastPositions;
     static std::deque<double> lastIntensities;
 
-    if (lastPositions.size() >= 100) {
-        lastPositions.pop_front();
-        lastPositions.push_back(position);
+    lastPositions.push_back(position);
+    lastIntensities.push_back(voltage);
 
-        lastIntensities.pop_front();
-        lastIntensities.push_back(voltage);
-    }
-    else {
-        lastPositions.push_back(position);
-        lastIntensities.push_back(voltage);
-    }
 
-    if (lastPositions.size() < 100) return false;
-
-    bool decreasing = true;
-    for (size_t i = lastIntensities.size() - 50; i < lastIntensities.size() - 1; ++i) {
-        if (lastIntensities[i] <= lastIntensities[i + 1]) {
-            decreasing = false;
-            break; // No need to check further
-        }
-    }
-    int maxIndex = 0;
     double maxVoltage = lastIntensities[0];
-    if (decreasing) {
-        double maxVoltage = lastIntensities[0];
-        for (size_t i = 1; i < lastIntensities.size(); i++) {
-            if (lastIntensities[i] > maxVoltage) {
-                maxVoltage = lastIntensities[i];
-                maxIndex = i;
-            }
+    for (size_t i = 1; i < lastIntensities.size(); i++) {
+        if (lastIntensities[i] > maxVoltage) {
+            maxVoltage = lastIntensities[i];
         }
-        maxPos = lastPositions[maxIndex];
-        return true; // Focus found
     }
-    return false; // No focus detected
+
 }
