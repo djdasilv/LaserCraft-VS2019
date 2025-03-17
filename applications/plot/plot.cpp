@@ -63,7 +63,9 @@ enum cStateScany
 
 //variables for gradient:
 
-bool enable_magnet_Z = false;
+bool scan_x = false;
+bool scan_y = false;
+bool scan_z = false;
 double gradient;
 double deltaz = 0.00005; // chercher la bonne valeur !!
 cVector3d P1;
@@ -286,6 +288,7 @@ bool lock_x = false;
 bool lock_z = false;
 cVector3d posX, posY, posZ;
 double maxSignal;
+cVector3d maxPosition;
 
 int main(int argc, char* argv[])
 {
@@ -706,8 +709,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
 {
     if (a_key == GLFW_KEY_T)
     {
-        //StateMode = STATE_AUTO_M;
-        reverseMode = true;
+        robotPosDes = maxPosition;
         
     }
 
@@ -756,13 +758,25 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
 
     //option - approaches sample on z-axis and writes output signal to file
     //Warning: old file is written over each time this mode is activated
-    if (a_key == GLFW_KEY_G)
+    if ((a_key == GLFW_KEY_G || a_key == GLFW_KEY_H || a_key == GLFW_KEY_J) && (a_action == GLFW_PRESS))
     {
         
-        if (!enable_magnet_Z) {
+        if (((!scan_x) && a_key == GLFW_KEY_G) || ((!scan_y) && a_key == GLFW_KEY_H) || (!scan_z && a_key == GLFW_KEY_J)) {
             outFile.open("output.csv", std::ios::trunc);
             if (outFile.is_open()) {
-                outFile << "Position in z [a.u.],Voltage [V]"  << std::endl;
+                    switch (a_key) {
+                    case GLFW_KEY_G:
+                        outFile << "Position in x [m],Voltage [V]" << std::endl;
+                        break;
+                    case GLFW_KEY_H:
+                        outFile << "Position in y [m],Voltage [V]" << std::endl;
+                        break;
+                    case GLFW_KEY_J:
+                        outFile << "Position in z [m],Voltage [V]" << std::endl;
+                        break;
+                    default:
+                        break;
+                }
                 std::cout << "Data appended to output.csv successfully." << std::endl;
             }
             else cout << "Error opening file." << std::endl;
@@ -772,8 +786,16 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
             outFile.close();
             cout << "Data written and doc closed" << std::endl;
         }
-
-        enable_magnet_Z = !enable_magnet_Z;
+        switch (a_key){
+            case GLFW_KEY_G:
+                scan_x = !scan_x;
+            case GLFW_KEY_H:
+                scan_y = !scan_y;
+            case GLFW_KEY_J:
+                scan_z = !scan_z;
+            default:
+                break;
+        }
         hapticDevice->getPosition(hapticPosGrad0);
      
         
@@ -911,9 +933,9 @@ void updateGraphics(void)
     // update labelgradient et mettre à jour la pos du label, mettre au dessus de labelMessage
     labelGradient->setLocalPos((int)(0.5 * (width - labelGradient->getWidth())), 35);//centre le message au bas de l'écran
 
-    labelGradient->setText("Vibration: " + cStr(vibration) + "  /  " +
-        "Z magnet : " + cStr(enable_magnet_Z) + "  /  " +
-        "Auto Scan : " + cStr(enable_scan));
+    labelGradient->setText("X scan: " + cStr(scan_x) + "  /  " +
+        "Y Scan : " + cStr(scan_y) + "  /  " +
+        "Z Scan : " + cStr(scan_z));
 
 
 
@@ -1451,32 +1473,39 @@ void updateHapticDevice(void)
         double forcez;
         double Kp = 5000; // définir coefficent approprié. 
         double Kv = 5;
-
-        if (enable_magnet_Z == true){
-;
+        
+        if (scan_x == true || scan_y == true || scan_z == true) {
             static int i = 0;
             if (i % 100 == 0) {
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
-                outFile << robotPosition.z() << "," << voltageLevel << endl;
+                if (scan_x)outFile << robotPosition.x() << "," << voltageLevel << endl;
+                if (scan_y)outFile << robotPosition.y() << "," << voltageLevel << endl;
+                if (scan_z)outFile << robotPosition.z() << "," << voltageLevel << endl;
                 outFile.flush();
-                maxSignal=updateMax(robotPosition, voltageLevel);
+                maxSignal = updateMax(robotPosition, voltageLevel, maxPosition);
                 i = 0;
 
             }
             i++;
-  
-             // compute a haptic damping factor based on laser signal
-             double dampingGain = 0.2;
-             hapticDampingFactor = dampingGain * voltageLevel;
-                
+
+            // compute a haptic damping factor based on laser signal
+            double dampingGain = 0.2;
+            hapticDampingFactor = dampingGain * voltageLevel;
+
             //find the focus plane
             cVector3d maxPos;
-            cVector3d z_vector(0.000000, 0, 0.0000001);
-            robotPosDes = robotPosDes + z_vector;
+            cVector3d scan_vector(0,0,0);
+
+            if (scan_x) scan_vector.set(0.0000001, 0, 0);
+            else if (scan_y) scan_vector.set(0, 0.0000001, 0);
+            else if (scan_z) scan_vector.set(0, 0, 0.0000001);
+            robotPosDes = robotPosDes + scan_vector;
+            //cout << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
             cVector3d robotPosition;
-            robotDevice->getPosition(robotPosition)   
+            robotDevice->getPosition(robotPosition);
         }
+
 
         // Compute the force to lock haptic in x,y or z direction according to which variable is set to true
         if (lock_x) forcex = Kp * (posX.x() - hapticPos.x()) -Kv * hapticVel.x();
