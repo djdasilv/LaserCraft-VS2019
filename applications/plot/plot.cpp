@@ -1480,10 +1480,13 @@ void updateHapticDevice(void)
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
                 if (scan_x)outFile << robotPosition.x() << "," << voltageLevel << endl;
-                if (scan_y)outFile << robotPosition.y() << "," << voltageLevel << endl;
+                if (scan_y) {
+                    outFile << robotPosition.y() << "," << voltageLevel << endl;
+                    maxSignal = updateMax(robotPosition, voltageLevel, maxPosition);
+                }
                 if (scan_z)outFile << robotPosition.z() << "," << voltageLevel << endl;
                 outFile.flush();
-                maxSignal = updateMax(robotPosition, voltageLevel, maxPosition);
+                
                 i = 0;
 
             }
