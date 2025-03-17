@@ -2,6 +2,12 @@
 
 #include <vector>
 #include <deque>
+#include "chai3d.h"
+#include "cbw.h"
+#include <GLFW/glfw3.h>
+
+using namespace chai3d;
+using namespace std;
 
 
 class GaussianFilter {
@@ -18,4 +24,6 @@ public:
     // Method to apply the Gaussian filter
     double applyFilter(double new_measurement);
 };
+
+bool find_focus(cVector3d position,double voltag, cVector3d& maxPose) ;
 

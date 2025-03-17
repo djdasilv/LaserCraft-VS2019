@@ -5,7 +5,7 @@
 //==============================================================================
 
 #include "chai3d.h"
-#include "cbw.h"
+//#include "cbw.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <chrono>
@@ -286,6 +286,9 @@ void close(void);
 
 ofstream outFile;
 bool reverseMode=false;
+bool lock_y = false;
+bool lock_x = false;
+bool lock_z = false;
 
 int main(int argc, char* argv[])
 {
@@ -720,12 +723,21 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         robotPosDesScan = robotPosScan0;
     }
 
-    //option - manuel step in x of 0.0003m
+    //Lock X translation
     if (a_key == GLFW_KEY_X)
     {
-        cVector3d StepX;
-        StepX.set(0.0003, 0, 0);
-        robotPosDesScan = robotPosDesScan + StepX;
+        lock_x = !lock_x;
+    }
+    
+    //Lock Y translation
+        if (a_key == GLFW_KEY_Y)
+    {
+        lock_y = !lock_y;
+    }
+    //Lock Z translation
+    if (a_key == GLFW_KEY_Z)
+    {
+        lock_y = !lock_y;
     }
 
     //option - activation of the manuel mode
@@ -1211,8 +1223,8 @@ void updateSensor(void)
 
 
             //compute gradient along direction of travel:
-            double intensityAtPoint1;
-            double intensityAtPoint2;
+            double intensityAtPoint1=0;
+            double intensityAtPoint2=0;
             if (stateGradient == STATE_AQUIREPOINT1)
             {
 
@@ -1565,9 +1577,6 @@ void updateRobotDevice(void)
         }
 
 
-
-
-
         // release mutex
         mutexDevices.release();
 
@@ -1706,9 +1715,16 @@ void updateHapticDevice(void)
         // for both IDLE and TELEOPERATION states
         // 
         //////////////////////////////////////////////////////////////////////////////////////////////
-        if (enable_magnet_Z == true)
-        {
+        //write code for spring force here : 
+        cVector3d springforce;
+        double forcex;
+        double forcey;
+        double forcez;
+        double Kp = 2000; // définir coefficent approprié. 
+        double Kv = 5;
 
+        if (enable_magnet_Z == true){
+        
             //threshold to block the robot on the xyplane 
            // if (voltageLevel > intensityThreshold)
             //{
@@ -1725,28 +1741,8 @@ void updateHapticDevice(void)
                 i = 0;
             }
             i++;
-        
-            
-             //write code for spring force here : 
-             cVector3d springforce;
-             double forcex;
-             double forcey;
-             double forcez;
-             double Kp = 2000; // définir coefficent approprié. 
-             double Kv = 5;
-
-             // calcul of the spring force that need to be applied to the haptic device
-             forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
-             forcey = Kp * (hapticPosGrad0.y() - hapticPos.y()) - Kv * hapticVel.y();
-             forcez = 0.0;
-
-             // set spring force vector
-             springforce.set(forcex, forcey, forcez);//applying force to the haptic device
-
-
-
-             // add spring force to final force
-             force = force + springforce;
+  
+             
 
 
 
@@ -1754,13 +1750,38 @@ void updateHapticDevice(void)
              double dampingGain = 0.2;
              hapticDampingFactor = dampingGain * voltageLevel;
                 
-            
+            //find the focus plane
+             static bool focus = false;
+             if (focus == false) {
+                 cVector3d maxPos;
+                 cVector3d z_vector(0, 0, 0.0001);
+                 robotPosDes = robotPosDes - z_vector;
+                 cVector3d robotPosition;
+                 robotDevice->getPosition(robotPosition);
+                 focus = find_focus(robotPosition,voltageLevel,maxPos);
+                 if (focus && robotPosDes.length() - maxPos.length() < 0.000001) {
+                     robotPosDes = maxPos;
+                 }
+             }
         
 
 
         }
 
+        // calcul of the spring force that need to be applied to the haptic device
+        if (lock_x) forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
+        else forcex = 0;
+        if (lock_y) forcey = Kp * (hapticPosGrad0.y() - hapticPos.y()) - Kv * hapticVel.y();
+        else forcey = 0;
+        if (lock_z) forcez = forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
+        else forcez = 0;
         
+
+        // set spring force vector
+        springforce.set(forcex, forcey, forcez);//applying force to the haptic device
+
+        // add spring force to final force
+        force = force + springforce;
                 
         /// <param name=""></param>
         if (plan_xy == true)
