@@ -66,7 +66,6 @@ enum cStateScany
 bool enable_magnet_Z = false;
 double gradient;
 double deltaz = 0.00005; // chercher la bonne valeur !!
-vector<double> vectDeltaz = { 0, 0, deltaz };
 cVector3d P1;
 double P1z;
 cVector3d P2;
@@ -85,10 +84,6 @@ double intensityThreshold = 0.3;//verifier si coeff est approprié.
 
 //variable for vibration:
 bool vibration = false;
-
-//variable for lock in plan xy:
-bool plan_xy = false;
-cVector3d hapticPosPlan0; // position enregistrée quand le mode plan est activée
 
 double voltageLevel;
 bool is_in_bulk = true;
@@ -289,6 +284,7 @@ bool reverseMode=false;
 bool lock_y = false;
 bool lock_x = false;
 bool lock_z = false;
+cVector3d posX, posY, posZ;
 
 int main(int argc, char* argv[])
 {
@@ -310,10 +306,10 @@ int main(int argc, char* argv[])
     cout << "[4] - scale factor 0.50x" << endl;
     cout << "[c] - reset offset" << endl;
     cout << "[f] - Enable/Disable full screen mode" << endl;
-    cout << "[g] - Enable Z magnet" << endl;
-    cout << "[v] - Enable XY vibration" << endl;
-    cout << "[p] - Enable XY plan" << endl;
-    cout << "[a] - Enable automatic scan" << endl;
+    cout << "[g] - Find first plane of focus on a glass sample" << endl;
+    cout << "[x] - Lock translation in x direction" << endl;
+    cout << "[y] - Lock translation in y direction" << endl;
+    cout << "[z] - Lock translation in z direction" << endl;
     cout << "[r] - Inverse bulk and structure haptic" << endl;
     cout << "[S] - Set new maximum obtained voltage [V]. Default set to 2 V." << endl;
     cout << "[q] - Exit application" << endl;
@@ -711,6 +707,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     {
         //StateMode = STATE_AUTO_M;
         reverseMode = true;
+        
     }
 
     //option - activation of the scanning mode
@@ -724,20 +721,23 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     }
 
     //Lock X translation
-    if (a_key == GLFW_KEY_X)
-    {
+    if (a_key == GLFW_KEY_X && (a_action != GLFW_PRESS))
+    {   
+        hapticDevice->getPosition(posX);
         lock_x = !lock_x;
     }
     
     //Lock Y translation
-        if (a_key == GLFW_KEY_Y)
-    {
+        if (a_key == GLFW_KEY_Y && (a_action != GLFW_PRESS))
+    {   
+        hapticDevice->getPosition(posY);
         lock_y = !lock_y;
     }
     //Lock Z translation
-    if (a_key == GLFW_KEY_Z)
+    if (a_key == GLFW_KEY_Z && (a_action != GLFW_PRESS))
     {
-        lock_y = !lock_y;
+        hapticDevice->getPosition(posZ);
+        lock_z = !lock_z;
     }
 
     //option - activation of the manuel mode
@@ -771,26 +771,11 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
             cout << "Data written and doc closed" << std::endl;
         }
 
-        
-
         enable_magnet_Z = !enable_magnet_Z;
         hapticDevice->getPosition(hapticPosGrad0);
      
         
 
-    }
-
-    //option - activation of the vibration in x and y
-    if (a_key == GLFW_KEY_V)
-    {
-        vibration = !vibration;
-    }
-
-    //option - activation of lock in pln xy
-    if (a_key == GLFW_KEY_P)
-    {
-        plan_xy = !plan_xy;
-        hapticDevice->getPosition(hapticPosPlan0);
     }
 
 
@@ -806,7 +791,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         glfwSetWindowShouldClose(a_window, GLFW_TRUE);
     }
 
-    // option - scale factor 0.005
+    // option - scale factor 0.001
     if ((a_key == GLFW_KEY_0) && (state == STATE_IDLE))
     {
         scaleFactor = 0.001;
@@ -926,7 +911,6 @@ void updateGraphics(void)
 
     labelGradient->setText("Vibration: " + cStr(vibration) + "  /  " +
         "Z magnet : " + cStr(enable_magnet_Z) + "  /  " +
-        "XY plan : " + cStr(plan_xy) + "  /  " +
         "Auto Scan : " + cStr(enable_scan));
 
 
@@ -1320,262 +1304,6 @@ void updateRobotDevice(void)
         double Kv = 10;
         cVector3d force = Kp * (robotPosDes - robotPosCur) - Kv * robotVelCur;
 
-        //code vibration ICI !!!!!
-
-        if (vibration == true)
-        {
-            cVector3d robotPosDesMod;
-            cVector3d oscillation;
-            double ampl = 0.0003; // amplitude A = 0.1 mm
-            double freq = 20; //frequency f = 10Hz
-            double Modx = robotPosDes.x() + ampl * sin(2 * M_PI * freq * timeInSeconds);
-            double Mody = robotPosDes.y() + ampl * sin(2 * M_PI * freq * timeInSeconds);
-            double Modz = robotPosDes.z() + ampl * sin(2 * M_PI * freq * timeInSeconds);
-
-            robotPosDesMod.set(Modx, Mody, Modz);
-            force = Kp * (robotPosDesMod - robotPosCur) - Kv * robotVelCur;
-
-        }
-
-
-
-        /////////////////////////////////////////////////////////////////////
-        ////////////// 
-        //////////////code scan automatique ici : 
-        ////////////// 
-        /////////////////////////////////////////////////////////////////////
-        if (StateMode == STATE_AUTO)
-        {
-            cVector3d robotPosDesMod;
-            if (timeInSeconds >= 0.1)
-            {
-
-                //
-                double diffx = robotPosCur.x() - robotPosScan0.x();
-                double diffy = robotPosCur.y() - robotPosScan0.y();
-                double diffz = robotPosCur.z() - robotPosScan0.z();
-                double maxx = robotPosScan0.x() + 0.001;
-                double maxy = robotPosScan0.y() + 0.001;
-                double maxz = robotPosScan0.z() + 0.001;
-                double stepx = 0.0001;
-                double stepy = 0.0001;
-                double stepz = 0.0001;
-
-                if (StateScanx == STATE_FORWARD_X)
-                {
-                    double Modx = robotPosCur.x() + stepx;
-                    double Mody = robotPosCur.y();
-                    double Modz = robotPosCur.z();
-                    robotPosDesScan.set(Modx, Mody, Modz);
-                    timePoint0 = chrono::high_resolution_clock::now();
-                    if (diffx >= maxx)
-                    {
-
-                        if (StateScany == STATE_FORWARD_Y)
-                        {
-                            Mody = robotPosCur.y() + stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy >= maxy)
-                            {
-                                Modz = robotPosCur.z() + stepz;
-                                robotPosCur.set(Modx, Mody, Modz);
-                                StateScany = STATE_BACKWARD_Y;
-                            }
-
-                        }
-                        else if (StateScany == STATE_BACKWARD_Y)
-                        {
-                            Mody = robotPosCur.y() - stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy <= 0)
-                            {
-                                Modz = robotPosCur.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                StateScany = STATE_FORWARD_Y;
-                            }
-                        }
-                        StateScanx = STATE_BACKWARD_X;
-                    }
-
-                }
-                else if (StateScanx == STATE_BACKWARD_X)
-                {
-                    double Modx = robotPosCur.x() - stepx;
-                    double Mody = robotPosCur.y();
-                    double Modz = robotPosCur.z();
-                    robotPosDesScan.set(Modx, Mody, Modz);
-                    timePoint0 = chrono::high_resolution_clock::now();
-                    stepx = -0.0003;
-                    if (diffx <= 0)
-
-                        if (StateScany == STATE_FORWARD_Y)
-                        {
-                            Mody = robotPosCur.y() + stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy >= maxy)
-                            {
-                                Modz = robotPosCur.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                StateScany = STATE_BACKWARD_Y;
-                            }
-                        }
-                        else if (StateScany == STATE_BACKWARD_Y)
-                        {
-                            Mody = robotPosCur.y() - stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy <= 0)
-                            {
-                                Modz = robotPosCur.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                StateScany = STATE_FORWARD_Y;
-                            }
-                        }
-                    StateScanx = STATE_FORWARD_X;
-                }
-
-
-
-                if (diffz >= maxz)
-                {
-                    StateMode = STATE_MANUEL;
-                }
-                force = Kp * (robotPosDesScan - robotPosCur) - Kv * robotVelCur;
-            }
-
-        }
-
-        // Iput here the code
-        if (StateMode == STATE_AUTO_M)
-        { //wrong intialisation in teh beginning of the intial possition of the code 
-            //need to implemetn a break of some sort. And figure out how to save the values... 
-            robotPosDesScan = robotPosDes; //good for intial value, but gets stuck here... (begeger seg bare i en rettning (frem og tilbake ))
-           //i dont kow if i am reading out the voltage anzwhere in this code CHECK!!!!
-                                           // int itteration_i = 0;
-           // int itteration_j = 0;
-           // int rows = 100;
-           // int cols = 100; 
-
-           // vector<vector<float>>voltagevalue(rows, vector<float>(cols)); //vector for storing values from automatic code
-
-            cVector3d robotPosDesMod;
-            if (timeInSeconds >= 0.1)
-            {
-                double diffx = robotPosDesScan.x() - robotPosScan0.x();
-                double diffy = robotPosDesScan.y() - robotPosScan0.y();
-                double diffz = robotPosDesScan.z() - robotPosScan0.z();
-                double maxx = robotPosScan0.x() + 0.01; // Movment in robot or movment in something else?
-                double maxy = robotPosScan0.y() + 0.01;
-                double maxz = robotPosScan0.z() + 0.01;
-                double stepx = 0.001;
-                double stepy = 0.001;
-                double stepz = 0.001;
-
-                if (StateScanx == STATE_FORWARD_X)
-                {
-                    double Modx = robotPosDesScan.x() + stepx;
-                    double Mody = robotPosDesScan.y();
-                    double Modz = robotPosDesScan.z();
-                    robotPosDesScan.set(Modx, Mody, Modz);
-                    robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                  //  voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                  //  itteration_j += 1;
-                    timePoint0 = chrono::high_resolution_clock::now();
-                    if (diffx >= maxx)
-                    {
-
-                        if (StateScany == STATE_FORWARD_Y)
-                        {
-                            Mody = robotPosDesScan.y() + stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy >= maxy)
-                            {
-                                Modz = robotPosDesScan.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                            //    voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                            //    itteration_j += 1;
-                                StateScany = STATE_BACKWARD_Y;
-                            }
-
-                        }
-                        else if (StateScany == STATE_BACKWARD_Y)
-                        {
-                            Mody = robotPosDesScan.y() - stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy <= 0)
-                            {
-                                Modz = robotPosDesScan.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                            //    voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                            //    itteration_j += 1;
-                                StateScany = STATE_FORWARD_Y;
-                            }
-                        }
-                        StateScanx = STATE_BACKWARD_X;
-                    }
-
-                }
-                else if (StateScanx == STATE_BACKWARD_X)
-                {
-                    double Modx = robotPosDesScan.x() - stepx;
-                    double Mody = robotPosDesScan.y();
-                    double Modz = robotPosDesScan.z();
-                    robotPosDesScan.set(Modx, Mody, Modz);
-                    robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                   // voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                    // itteration_i += 1;
-                   // itteration_j += 1;
-                    timePoint0 = chrono::high_resolution_clock::now();
-                    stepx = -0.0003;
-                    if (diffx <= 0)
-                    {
-                        if (StateScany == STATE_FORWARD_Y)
-                        {
-                            Mody = robotPosDesScan.y() + stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy >= maxy)
-                            {
-                                Modz = robotPosDesScan.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                               // voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                               // itteration_j += 1;
-                                StateScany = STATE_BACKWARD_Y;
-                            }
-                        }
-                        else if (StateScany == STATE_BACKWARD_Y)
-                        {
-                            Mody = robotPosDesScan.y() - stepy;
-                            robotPosDesScan.set(Modx, Mody, Modz);
-                            if (diffy <= 0)
-                            {
-                                Modz = robotPosDesScan.z() + stepz;
-                                robotPosDesScan.set(Modx, Mody, Modz);
-                                robotPosDes = robotPosDesScan; //Movment from haptic to robot (?)
-                                //voltagevalue[itteration_i][itteration_j] = voltageLevel;
-                               // itteration_j += 1;
-                                StateScany = STATE_FORWARD_Y;
-                            }
-                        }
-                        StateScanx = STATE_FORWARD_X;
-                        // itteration_i += 1;
-                    }
-                }
-                if (diffz >= maxz)
-                {
-                    StateMode = STATE_MANUEL;
-                }
-
-                //  for (int i = 0; i < rows; i++) {
-                 //     for (int j = 0; j < cols; j++) { //det her fungerer IKKE
-                 //         cout << voltagevalue[i][j] << endl;
-                 //     }
-                 // }
-            }
-
-        }
-
 
         // release mutex
         mutexDevices.release();
@@ -1711,41 +1439,30 @@ void updateHapticDevice(void)
 
         //////////////////////////////////////////////////////////////////////////////////////////////
         // 
-        // compute a planar haptic spring force on axis X and Z. This force is computed 
+        // compute a planar haptic spring force on all three axis. This force is computed 
         // for both IDLE and TELEOPERATION states
         // 
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        //write code for spring force here : 
+        ////////////////////////////////////////////////////////////////////////////////////////////// 
         cVector3d springforce;
         double forcex;
         double forcey;
         double forcez;
-        double Kp = 2000; // définir coefficent approprié. 
+        double Kp = 5000; // définir coefficent approprié. 
         double Kv = 5;
 
         if (enable_magnet_Z == true){
-        
-            //threshold to block the robot on the xyplane 
-           // if (voltageLevel > intensityThreshold)
-            //{
-                //hapticPosPlan0 = hapticPos;
-                //enable_magnet_Z = false;
-               // plan_xy = true;
+;
             static int i = 0;
             if (i % 100 == 0) {
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
-                outFile << robotPosition.z() << "," << robotPosCur.z() << "," << voltageLevel << endl;
+                outFile << robotPosition.z() << "," << voltageLevel << endl;
                 //outFile << rand()<<"," << rand()<<endl;
                 outFile.flush();
                 i = 0;
             }
             i++;
   
-             
-
-
-
              // compute a haptic damping factor based on laser signal
              double dampingGain = 0.2;
              hapticDampingFactor = dampingGain * voltageLevel;
@@ -1754,11 +1471,12 @@ void updateHapticDevice(void)
              static bool focus = false;
              if (focus == false) {
                  cVector3d maxPos;
-                 cVector3d z_vector(0, 0, 0.0001);
-                 robotPosDes = robotPosDes - z_vector;
+                 cVector3d z_vector(0.000000, 0, 0.0000001);
+                 robotPosDes = robotPosDes + z_vector;
                  cVector3d robotPosition;
                  robotDevice->getPosition(robotPosition);
                  focus = find_focus(robotPosition,voltageLevel,maxPos);
+                 //cout << focus << endl;
                  if (focus && robotPosDes.length() - maxPos.length() < 0.000001) {
                      robotPosDes = maxPos;
                  }
@@ -1768,51 +1486,19 @@ void updateHapticDevice(void)
 
         }
 
-        // calcul of the spring force that need to be applied to the haptic device
-        if (lock_x) forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
-        else forcex = 0;
-        if (lock_y) forcey = Kp * (hapticPosGrad0.y() - hapticPos.y()) - Kv * hapticVel.y();
-        else forcey = 0;
-        if (lock_z) forcez = forcex = Kp * (hapticPosGrad0.x() - hapticPos.x()) - Kv * hapticVel.x();
-        else forcez = 0;
-        
+        // Compute the force to lock haptic in x,y or z direction according to which variable is set to true
+        if (lock_x) forcex = Kp * (posX.x() - hapticPos.x()) -Kv * hapticVel.x();
+        else if (!lock_x)  forcex = 0;
+
+        if (lock_y) forcey = Kp * (posY.y() - hapticPos.y()) -Kv * hapticVel.y();
+        else if(!lock_y) forcey = 0;
+
+        if (lock_z) forcez = Kp * (posZ.z() - hapticPos.z()) -Kv * hapticVel.x();
+        else if (!lock_z) forcez = 0;
+
 
         // set spring force vector
-        springforce.set(forcex, forcey, forcez);//applying force to the haptic device
-
-        // add spring force to final force
-        force = force + springforce;
-                
-        /// <param name=""></param>
-        if (plan_xy == true)
-        {
-            cVector3d springforce;
-            double forcex;
-            double forcey;
-            double forcez;
-            double Kp_factor;
-
-            Kp_factor = voltageLevel * 10000; // définir coefficent approprié. (max signal = 2V (23.08.23) & max Kp =1000 -> coeff = 500
-            double Kv = 5;
-            double Kp = cClamp(Kp_factor, 0.0, 1000.0);//mettre dépendance k à l'intensité
-            //hapticPosPlan0 = PosMax;
-
-            forcez = -Kp * (hapticPos.z() - hapticPosPlan0.z()) - Kv * hapticVel.z();
-            forcex = 0;
-            forcey = 0;
-
-            // set spring force vector
-            springforce.set(forcex, forcey, forcez);//applying force to the haptic deviceaa
-
-            // add spring force to final force
-            force = force + springforce;
-
-        }
-  
-
-
-
-
+        force.set(forcex, forcey, forcez);//applying force to the haptic device
 
 
         // release mutex

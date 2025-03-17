@@ -3,9 +3,9 @@
 GaussianFilter::GaussianFilter(int size, double sigma) : window_size(size), sigma(sigma) {
     kernel.resize(window_size);
     double sum = 0.0;
-    int half_size = window_size / 2;
+    double half_size = window_size / 2;
 
-    for (int i = 0; i < window_size; ++i) {
+    for (double i = 0; i < window_size; ++i) {
         double x = i - half_size;
         kernel[i] = exp(-0.5 * (x * x) / (sigma * sigma));
         sum += kernel[i];
