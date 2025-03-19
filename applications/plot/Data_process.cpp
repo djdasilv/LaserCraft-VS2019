@@ -34,7 +34,7 @@ double GaussianFilter::applyFilter(double new_measurement) {
     return filtered_value;
 }
 
-double updateMax(cVector3d position, double voltage,cVector3d& maxPos) {
+double updateMax(cVector3d position, double voltage,cVector3d& maxPos,bool reset) {
     static std::deque<cVector3d> lastPositions;
     static std::deque<double> lastIntensities;
 
@@ -45,6 +45,14 @@ double updateMax(cVector3d position, double voltage,cVector3d& maxPos) {
     double maxVoltage = *it;  // Get the value
     double maxIndex = std::distance(lastIntensities.begin(), it); // Get the index
     maxPos = lastPositions[maxIndex];
+    cVector3d temporary_max = position;
+    if (reset == true) {
+        lastIntensities.clear();
+        lastPositions.clear();
+        maxPos = temporary_max;
+        maxVoltage = 0;
+        return 0;
+    }
     
     return maxVoltage;
 }

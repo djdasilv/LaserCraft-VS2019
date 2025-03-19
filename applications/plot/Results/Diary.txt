@@ -7,3 +7,8 @@ BigSampleZ-Sweep_17_3_25AfternoonV2 - Yielded better results than BigSampleZ-Swe
 BigSampleZ-Sweep_17_3_25AfternoonV3 - Same as V2 on a different spot to look for differences/similarities
 
 GlassSample_17_3_25AfternoonWithBackplate - Was done on the same 1mm thick glass sample but with the bottom side being directly touching the backplate. All the other for thin the glass sample were made with the sample hanging (I think).
+GlassSample_18_3_25Morning - Taken with laser at 35%efficience, signal quite different from the ones the day before ,yet procedure the same(?)
+GlassSample_18_3_25MorningV2 - Same
+BigSampleXSWeepFull_18_3_25.csv - Same setting, focus on the surface of the substrate
+BigSampleXSWeepFull_18_3_25V2.csv - Same but in bulk
+BigSampleXSWeepFull_18_3_25V3.csv.csv - same same i think (?)

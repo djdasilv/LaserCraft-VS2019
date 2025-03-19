@@ -315,6 +315,7 @@ int main(int argc, char* argv[])
     cout << "[y] - Lock translation in y direction" << endl;
     cout << "[z] - Lock translation in z direction" << endl;
     cout << "[r] - Inverse bulk and structure haptic" << endl;
+    cout << "[t] - Move to surface of the sample" << endl;
     cout << "[S] - Set new maximum obtained voltage [V]. Default set to 2 V." << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
@@ -710,6 +711,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     if (a_key == GLFW_KEY_T)
     {
         robotPosDes = maxPosition;
+        cout << "Moved to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
         
     }
 
@@ -764,7 +766,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         if (((!scan_x) && a_key == GLFW_KEY_G) || ((!scan_y) && a_key == GLFW_KEY_H) || (!scan_z && a_key == GLFW_KEY_J)) {
             outFile.open("output.csv", std::ios::trunc);
             if (outFile.is_open()) {
-                    switch (a_key) {
+                cVector3d tmp(0,0,0);
+                switch (a_key) {
                     case GLFW_KEY_G:
                         outFile << "Position in x [m],Voltage [V]" << std::endl;
                         break;
@@ -773,6 +776,10 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                         break;
                     case GLFW_KEY_J:
                         outFile << "Position in z [m],Voltage [V]" << std::endl;
+                        robotDevice->getPosition(tmp);
+                        tmp = robotRot * tmp;
+                        updateMax(tmp , 0, maxPosition, true);
+                        cout << "Postion update to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
                         break;
                     default:
                         break;
@@ -789,10 +796,14 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         switch (a_key){
             case GLFW_KEY_G:
                 scan_x = !scan_x;
+                break;
             case GLFW_KEY_H:
                 scan_y = !scan_y;
+                break;
             case GLFW_KEY_J:
                 scan_z = !scan_z;
+                
+                break;
             default:
                 break;
         }
@@ -1479,12 +1490,15 @@ void updateHapticDevice(void)
             if (i % 100 == 0) {
                 cVector3d robotPosition;
                 robotDevice->getPosition(robotPosition);
-                if (scan_x)outFile << robotPosition.x() << "," << voltageLevel << endl;
-                if (scan_y) {
+                robotPosition = robotRot*robotPosition;
+                if (scan_x) outFile << robotPosition.x() << "," << voltageLevel << endl;
+                else if (scan_y) {
                     outFile << robotPosition.y() << "," << voltageLevel << endl;
-                    maxSignal = updateMax(robotPosition, voltageLevel, maxPosition);
                 }
-                if (scan_z)outFile << robotPosition.z() << "," << voltageLevel << endl;
+                else if(scan_z){
+                    outFile << robotPosition.z() << "," << voltageLevel << endl;
+                    maxSignal = updateMax(robotPosition, voltageLevel, maxPosition,false);                
+                }
                 outFile.flush();
                 
                 i = 0;
@@ -1502,10 +1516,10 @@ void updateHapticDevice(void)
 
             if (scan_x) scan_vector.set(0.0000001, 0, 0);
             else if (scan_y) scan_vector.set(0, 0.0000001, 0);
-            else if (scan_z) scan_vector.set(0, 0, 0.0000001);
+            else if (scan_z) scan_vector.set(0, 0, 0.00000001);
             robotPosDes = robotPosDes + scan_vector;
             //cout << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
-            cVector3d robotPosition;
+            static cVector3d robotPosition;
             robotDevice->getPosition(robotPosition);
         }
 
