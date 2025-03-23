@@ -5,7 +5,6 @@
 //==============================================================================
 
 #include "chai3d.h"
-//#include "cbw.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <chrono>
@@ -38,12 +37,7 @@ enum cStateGradient
     STATE_AQUIREPOINT1,
     STATE_AQUIREPOINT2
 };
-enum cStateMode
-{
-    STATE_MANUEL,
-    STATE_AUTO,
-    STATE_AUTO_M //Added 
-};
+
 enum cStateScanx
 {
     STATE_FORWARD_X,
@@ -78,17 +72,11 @@ cVector3d voltageGradient;
 
 cVector3d forceGradient;
 cVector3d hapticPosGrad0;// position enregistrée quand le mode approach est activé.
-bool enable_scan = false;
 cVector3d robotPosScan0;
 chrono::high_resolution_clock::time_point timePointScan0 = chrono::high_resolution_clock::now();
 
-double intensityThreshold = 0.3;//verifier si coeff est approprié.
-
-//variable for vibration:
-bool vibration = false;
-
 double voltageLevel;
-bool is_in_bulk = true;
+
 // a flag to indicate if the simulation currently running
 bool simulationRunning = false;
 
@@ -158,9 +146,6 @@ cState state;
 // state gradient
 cStateGradient stateGradient = STATE_AQUIREPOINT1;
 
-// state mode
-cStateMode StateMode = STATE_MANUEL;
-
 // state scan x
 cStateScanx StateScanx = STATE_FORWARD_X;
 
@@ -198,7 +183,6 @@ cLabel* labelGradient;
 cShapeSphere* cursorRobotPosDes;
 
 // a small sphere (cursor) representing the desired position of the robot while scanning
-
 cShapeSphere* cursorRobotPosDesScan;
 
 // a virtual voxel like object
@@ -266,6 +250,8 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 
 // this function closes the application
 void close(void);
+void axis_locking(double* forcex, double* forcey, double* forcez);
+void auto_scan(void);
 
 //==============================================================================
 /*
@@ -715,16 +701,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         
     }
 
-    //option - activation of the scanning mode
-    if (a_key == GLFW_KEY_A)
-    {
-        StateMode = STATE_AUTO;
-        enable_scan = true;
-        chrono::high_resolution_clock::time_point timePointScan0 = chrono::high_resolution_clock::now();
-        robotDevice->getPosition(robotPosScan0);
-        robotPosDesScan = robotPosScan0;
-    }
-
     //Lock X translation
     if (a_key == GLFW_KEY_X && (a_action != GLFW_PRESS))
     {   
@@ -745,12 +721,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         lock_z = !lock_z;
     }
 
-    //option - activation of the manuel mode
-    if (a_key == GLFW_KEY_M)
-    {
-        StateMode = STATE_MANUEL;
-        enable_scan = false;
-    }
 
     // filter calls that only include a key press
     if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
@@ -758,7 +728,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         return;
     }
 
-    //option - approaches sample on z-axis and writes output signal to file
+    //Approaches sample on z-axis and writes output signal to file
     //Warning: old file is written over each time this mode is activated
     if ((a_key == GLFW_KEY_G || a_key == GLFW_KEY_H || a_key == GLFW_KEY_J) && (a_action == GLFW_PRESS))
     {
@@ -802,7 +772,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                 break;
             case GLFW_KEY_J:
                 scan_z = !scan_z;
-                
                 break;
             default:
                 break;
@@ -826,36 +795,29 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         glfwSetWindowShouldClose(a_window, GLFW_TRUE);
     }
 
-    // option - scale factor 0.001
-    if ((a_key == GLFW_KEY_0) && (state == STATE_IDLE))
-    {
-        scaleFactor = 0.001;
+    //Modify scale factor accord to which button is pressed
+    if (state == STATE_IDLE) {
+        switch (a_key) {
+        case GLFW_KEY_0:
+            scaleFactor = 0.001;
+            break;
+        case GLFW_KEY_1:
+            scaleFactor = 0.02;
+            break;
+        case GLFW_KEY_2:
+            scaleFactor = 0.05;
+            break;
+        case GLFW_KEY_3:
+            scaleFactor = 0.2;
+            break;
+        case GLFW_KEY_4:
+            scaleFactor = 0.5;
+            break;
+        default:
+            break;
+        }
     }
 
-
-    // option - scale factor 0.02
-    if ((a_key == GLFW_KEY_1) && (state == STATE_IDLE))
-    {
-        scaleFactor = 0.02;
-    }
-
-    // option - scale factor 0.05
-    if ((a_key == GLFW_KEY_2) && (state == STATE_IDLE))
-    {
-        scaleFactor = 0.05;
-    }
-
-    // option - scale factor 0.2
-    if ((a_key == GLFW_KEY_3) && (state == STATE_IDLE))
-    {
-        scaleFactor = 0.2;
-    }
-
-    // option - scale factor 0.5
-    if ((a_key == GLFW_KEY_4) && (state == STATE_IDLE))
-    {
-        scaleFactor = 0.5;
-    }
 
     // option - reset offset
     if (a_key == GLFW_KEY_C)
@@ -896,12 +858,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
             // set the desired number of samples to use for multisampling
             glfwWindowHint(GLFW_SAMPLES, 4);
         }
-    }
-
-    if (a_key == GLFW_KEY_S)
-    {
-        cout << "This fonction currently does not do anything" << endl;
-        
     }
 }
 
@@ -947,11 +903,6 @@ void updateGraphics(void)
     labelGradient->setText("X scan: " + cStr(scan_x) + "  /  " +
         "Y Scan : " + cStr(scan_y) + "  /  " +
         "Z Scan : " + cStr(scan_z));
-
-
-
-
-
 
     /////////////////////////////////////////////////////////////////////
     // VOLUME UPDATE
@@ -1032,7 +983,6 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color)
     mutexVoxel.release();
     flagMarkVolumeForUpdate = true;
 
-    // cout << voxelIndexX << " " << voxelIndexY << " " << voxelIndexZ << endl;
 }
 
 //------------------------------------------------------------------------------
@@ -1161,85 +1111,41 @@ void updateSensor(void)
             
             //Apply a gaussian filter to smoothen sensor values
             static GaussianFilter filter;
-            voltageLevel= filter.applyFilter(voltageLevel);
+            voltageLevel = filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
             double dampingGain = 0.4;
-            if (reverseMode == false) {
-                hapticDampingFactor = dampingGain * voltageLevel;
-            }
-            else {
-                hapticDampingFactor = dampingGain * voltageLevel;
-            }
+            hapticDampingFactor = dampingGain * voltageLevel;
+            
             // display data to scope
             scope->setSignalValues(voltageLevel);
 
            // draw a voxel if voltage level reaches a certain value
-            if (voltageLevel > threshold * 0.1)
-            {
-                cColorb color;
-                color.setR(0);
-                color.setG(0);
-                color.setB(128);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.2)
-            {
-                cColorb color;
-                color.setR(0);
-                color.setG(0);
-                color.setB(255);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.5)
-            {
-                cColorb color;
-                color.setR(0);
-                color.setG(128);
-                color.setB(0);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.6)
-            {
-                cColorb color;
-                color.setR(0);
-                color.setG(255);
-                color.setB(0);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.6)
-            {
-                cColorb color;
-                color.setR(255);
-                color.setG(255);
-                color.setB(0);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.8)
-            {
-                cColorb color;
-                color.setR(255);
-                color.setG(160);
-                color.setB(122);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > threshold * 0.9)
-            {
-                cColorb color;
-                color.setR(255);
-                color.setG(127);
-                color.setB(160);
-                setVoxel(robotPosCur - offset, color);
-            }
             if (voltageLevel > threshold)
             {
-                cColorb color;
-                color.setR(255);
-                color.setG(0);
-                color.setB(0);
+                cColorb color(0, 255, 0, 0.3);
                 setVoxel(robotPosCur - offset, color);
             }
-
+            if (voltageLevel > 2*threshold )
+            {
+                cColorb color(255, 255, 0, 0.5);
+                setVoxel(robotPosCur - offset, color);
+            }
+            if (voltageLevel > 3*threshold )
+            {
+                cColorb color(255, 165, 0, 0.7);
+                setVoxel(robotPosCur - offset, color);
+            }
+            if (voltageLevel > 4*threshold)
+            {
+                cColorb color(255, 0, 0, 0.9);
+                setVoxel(robotPosCur - offset, color);
+            }
+            if (voltageLevel > 5*threshold )
+            {
+                cColorb color(255, 255, 255, 0.05);
+                setVoxel(robotPosCur - offset, color);
+            }
 
             //compute gradient along direction of travel:
             double intensityAtPoint1=0;
@@ -1335,8 +1241,8 @@ void updateRobotDevice(void)
         robotVelCur = robotRot * vel;
 
         // compute spring force to move robot toward desired position (robotPosDes) 
-        double Kp = 2000;
-        double Kv = 10;
+        double Kp = 200;
+        double Kv = 100;
         cVector3d force = Kp * (robotPosDes - robotPosCur) - Kv * robotVelCur;
 
 
@@ -1485,54 +1391,10 @@ void updateHapticDevice(void)
         double Kp = 5000; // définir coefficent approprié. 
         double Kv = 5;
         
-        if (scan_x == true || scan_y == true || scan_z == true) {
-            static int i = 0;
-            if (i % 100 == 0) {
-                cVector3d robotPosition;
-                robotDevice->getPosition(robotPosition);
-                robotPosition = robotRot*robotPosition;
-                if (scan_x) outFile << robotPosition.x() << "," << voltageLevel << endl;
-                else if (scan_y) {
-                    outFile << robotPosition.y() << "," << voltageLevel << endl;
-                }
-                else if(scan_z){
-                    outFile << robotPosition.z() << "," << voltageLevel << endl;
-                    maxSignal = updateMax(robotPosition, voltageLevel, maxPosition,false);                
-                }
-                outFile.flush();
-                
-                i = 0;
-
-            }
-            i++;
-
-            // compute a haptic damping factor based on laser signal
-            double dampingGain = 0.2;
-            hapticDampingFactor = dampingGain * voltageLevel;
-
-            //find the focus plane
-            cVector3d maxPos;
-            cVector3d scan_vector(0,0,0);
-
-            if (scan_x) scan_vector.set(0.0000001, 0, 0);
-            else if (scan_y) scan_vector.set(0, 0.0000001, 0);
-            else if (scan_z) scan_vector.set(0, 0, 0.00000001);
-            robotPosDes = robotPosDes + scan_vector;
-            //cout << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
-            static cVector3d robotPosition;
-            robotDevice->getPosition(robotPosition);
-        }
-
+        void auto_scan();
 
         // Compute the force to lock haptic in x,y or z direction according to which variable is set to true
-        if (lock_x) forcex = Kp * (posX.x() - hapticPos.x()) -Kv * hapticVel.x();
-        else if (!lock_x)  forcex = 0;
-
-        if (lock_y) forcey = Kp * (posY.y() - hapticPos.y()) -Kv * hapticVel.y();
-        else if(!lock_y) forcey = 0;
-
-        if (lock_z) forcez = Kp * (posZ.z() - hapticPos.z()) -Kv * hapticVel.x();
-        else if (!lock_z) forcez = 0;
+        axis_locking(&forcex, &forcey, &forcez);
 
 
         // set spring force vector
@@ -1558,3 +1420,62 @@ void updateHapticDevice(void)
     hapticDevice->close();
 }
 
+void axis_locking(double* forcex, double* forcey, double* forcez) {
+    double Kp = 2000, Kv = 5;
+    cVector3d hapticPos(0, 0, 0);
+    hapticDevice->getPosition(hapticPos);
+
+    // get current velocity of haptic device
+    cVector3d hapticVel(0, 0, 0);
+    hapticDevice->getLinearVelocity(hapticVel);
+
+    if (lock_x) *forcex = Kp * (posX.x() - hapticPos.x()) - Kv * hapticVel.x();
+    else if (!lock_x)  *forcex = 0;
+
+    if (lock_y) *forcey = Kp * (posY.y() - hapticPos.y()) - Kv * hapticVel.y();
+    else if (!lock_y) *forcey = 0;
+
+    if (lock_z) *forcez = Kp * (posZ.z() - hapticPos.z()) - Kv * hapticVel.x();
+    else if (!lock_z) *forcez = 0;
+}
+
+void auto_scan(void) {
+    if (scan_x == true || scan_y == true || scan_z == true) {
+        static int i = 0;
+        if (i % 100 == 0) {
+            cVector3d robotPosition;
+            robotDevice->getPosition(robotPosition);
+            robotPosition = robotRot * robotPosition;
+            if (scan_x) outFile << robotPosition.x() << "," << voltageLevel << endl;
+            else if (scan_y) {
+                outFile << robotPosition.y() << "," << voltageLevel << endl;
+            }
+            else if (scan_z) {
+                outFile << robotPosition.z() << "," << voltageLevel << endl;
+                maxSignal = updateMax(robotPosition, voltageLevel, maxPosition, false);
+                threshold = 0.2 * maxSignal;
+            }
+            outFile.flush();
+
+            i = 0;
+
+        }
+        i++;
+
+        // compute a haptic damping factor based on laser signal
+        double dampingGain = 0.2;
+        hapticDampingFactor = dampingGain * voltageLevel;
+
+        //find the focus plane
+        cVector3d maxPos;
+        cVector3d scan_vector(0, 0, 0);
+
+        if (scan_x) scan_vector.set(0.0000001, 0, 0);
+        else if (scan_y) scan_vector.set(0, 0.0000001, 0);
+        else if (scan_z) scan_vector.set(0, 0, 0.00000001);
+        robotPosDes = robotPosDes + scan_vector;
+        //cout << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
+        static cVector3d robotPosition;
+        robotDevice->getPosition(robotPosition);
+    }
+}
