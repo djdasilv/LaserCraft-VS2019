@@ -152,7 +152,7 @@ cStateScanx StateScanx = STATE_FORWARD_X;
 // state scan y
 cStateScany StateScany = STATE_FORWARD_Y;
 
-float threshold = 2;
+double threshold = 2;
 
 //------------------------------------------------------------------------------
 // CHAI3D GRAPHIC VARIABLES AND OBJECTS
@@ -504,7 +504,6 @@ int main(int argc, char* argv[])
 
     // set material color
     object->m_material->setOrangeCoral();
-
     // show/hide boundary box
     object->setShowBoundaryBox(true);
 
@@ -1121,30 +1120,32 @@ void updateSensor(void)
             scope->setSignalValues(voltageLevel);
 
            // draw a voxel if voltage level reaches a certain value
-            if (voltageLevel > threshold)
-            {
-                cColorb color(0, 255, 0, 0.3);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > 2*threshold )
-            {
-                cColorb color(255, 255, 0, 0.5);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > 3*threshold )
-            {
-                cColorb color(255, 165, 0, 0.7);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > 4*threshold)
-            {
-                cColorb color(255, 0, 0, 0.9);
-                setVoxel(robotPosCur - offset, color);
-            }
-            if (voltageLevel > 5*threshold )
-            {
-                cColorb color(255, 255, 255, 0.05);
-                setVoxel(robotPosCur - offset, color);
+            if (!scan_z) {
+                if (voltageLevel > threshold)
+                {
+                    cColorb color(0, 255, 0, 0.3);
+                    setVoxel(robotPosCur - offset, color);
+                }
+                if (voltageLevel > 2 * threshold)
+                {
+                    cColorb color(255, 255, 0, 0.5);
+                    setVoxel(robotPosCur - offset, color);
+                }
+                if (voltageLevel > 3 * threshold)
+                {
+                    cColorb color(255, 165, 0, 0.7);
+                    setVoxel(robotPosCur - offset, color);
+                }
+                if (voltageLevel > 4 * threshold)
+                {
+                    cColorb color(255, 0, 0, 0.9);
+                    setVoxel(robotPosCur - offset, color);
+                }
+                if (voltageLevel > 5 * threshold)
+                {
+                    cColorb color(255, 255, 255, 0.05);
+                    setVoxel(robotPosCur - offset, color);
+                }
             }
 
             //compute gradient along direction of travel:
