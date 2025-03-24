@@ -697,7 +697,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     {
         robotPosDes = maxPosition;
         cout << "Moved to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
-        
+        cout << "Moved to :" << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
+
     }
 
     //Lock X translation
@@ -748,7 +749,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                         robotDevice->getPosition(tmp);
                         tmp = robotRot * tmp;
                         updateMax(tmp , 0, maxPosition, true);
-                        cout << "Postion update to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
+                        //cout << "Postion update to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
                         break;
                     default:
                         break;
@@ -984,6 +985,8 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color)
 
 }
 
+
+
 //------------------------------------------------------------------------------
 
 void updateSensor(void)
@@ -1110,7 +1113,7 @@ void updateSensor(void)
             
             //Apply a gaussian filter to smoothen sensor values
             static GaussianFilter filter;
-            voltageLevel = filter.applyFilter(voltageLevel);
+            //voltageLevel = filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
             double dampingGain = 0.4;
@@ -1121,32 +1124,13 @@ void updateSensor(void)
 
            // draw a voxel if voltage level reaches a certain value
             if (!scan_z) {
-                if (voltageLevel > threshold)
-                {
-                    cColorb color(0, 255, 0, 0.3);
-                    setVoxel(robotPosCur - offset, color);
-                }
-                if (voltageLevel > 2 * threshold)
-                {
-                    cColorb color(255, 255, 0, 0.5);
-                    setVoxel(robotPosCur - offset, color);
-                }
-                if (voltageLevel > 3 * threshold)
-                {
-                    cColorb color(255, 165, 0, 0.7);
-                    setVoxel(robotPosCur - offset, color);
-                }
-                if (voltageLevel > 4 * threshold)
-                {
-                    cColorb color(255, 0, 0, 0.9);
-                    setVoxel(robotPosCur - offset, color);
-                }
-                if (voltageLevel > 5 * threshold)
-                {
-                    cColorb color(255, 255, 255, 0.05);
-                    setVoxel(robotPosCur - offset, color);
-                }
-            }
+                //if (voltageLevel > threshold)
+                //{
+                cColorb color(255, 255, 255, 1);
+                //setVoxel(robotPosCur - offset, color);
+                setVoxel(cursorRobotPosDes->getGlobalPos(), color);
+                //}
+            }     
 
             //compute gradient along direction of travel:
             double intensityAtPoint1=0;
@@ -1243,10 +1227,10 @@ void updateRobotDevice(void)
 
         // compute spring force to move robot toward desired position (robotPosDes) 
         double Kp = 200;
-        double Kv = 100;
+        double Kv = 10;
         cVector3d force = Kp * (robotPosDes - robotPosCur) - Kv * robotVelCur;
-
-
+        
+        auto_scan();
         // release mutex
         mutexDevices.release();
 
@@ -1277,6 +1261,9 @@ void updateHapticDevice(void)
 
     // activate haptic forces
     hapticDevice->enableForces(true);
+
+    // set spring stiffness constant
+    double Kp = 200;
 
     // main haptic control loop
     while (simulationRunning)
@@ -1318,6 +1305,7 @@ void updateHapticDevice(void)
         //
         if (state == STATE_IDLE)
         {
+            
             // check if user has pressed the button
             if (userButton == true)
             {
@@ -1339,6 +1327,8 @@ void updateHapticDevice(void)
             {
                 // user has released button, go into idle mode
                 state = STATE_IDLE;
+                //cout << "Max at :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
+                //cout << "Robot position at :" << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
             }
             else
             {
@@ -1354,7 +1344,7 @@ void updateHapticDevice(void)
                 //////////////////////////////////////////////////////////////////////////////////////////////
 
                 // set spring stiffness constant
-                double Kp = 200;
+                //double Kp = 200;
 
                 // compute spring force
                 force = Kp * (robotPosCur - robotPosDes);
@@ -1367,14 +1357,16 @@ void updateHapticDevice(void)
                 //////////////////////////////////////////////////////////////////////////////////////////////
 
                 // set damping constant
-                double Kv = 30;
+                double Kv = 10;
 
                 // set damping factor based of hapticDampingFactor value computed in laser sensor thread; the value
                 // is clamped between 0.0 and 1.0 to avoid any instabilities from the haptic device
                 double damping = cClamp(hapticDampingFactor, 0.0, 1.0);
-
+                //double exp_coefficient = 0.01;
+                
                 // calculate damping force as proportional de haptic device velocity; add force to previously computed force
-                force = force - Kv * hapticDampingFactor * hapticVel;
+                force += -cClamp( Kv * pow(voltageLevel,3)/ hapticVel.length(),0.0, 30.0)*hapticVel;
+
             }
         }
 
@@ -1386,20 +1378,16 @@ void updateHapticDevice(void)
         // 
         ////////////////////////////////////////////////////////////////////////////////////////////// 
         cVector3d springforce;
-        double forcex;
-        double forcey;
-        double forcez;
-        double Kp = 5000; // définir coefficent approprié. 
+        double forcex = 0;
+        double forcey = 0;
+        double forcez = 0;
+        Kp = 20; // définir coefficent approprié. 
         double Kv = 5;
-        
-        void auto_scan();
 
         // Compute the force to lock haptic in x,y or z direction according to which variable is set to true
         axis_locking(&forcex, &forcey, &forcez);
-
-
-        // set spring force vector
-        force.set(forcex, forcey, forcez);//applying force to the haptic device
+        force += cVector3d(forcex, forcey, forcez);
+        //force.set(forcex, forcey, forcez);//applying force to the haptic device
 
 
         // release mutex
@@ -1422,7 +1410,7 @@ void updateHapticDevice(void)
 }
 
 void axis_locking(double* forcex, double* forcey, double* forcez) {
-    double Kp = 2000, Kv = 5;
+    double K_axis = 2000, Kv = 5;
     cVector3d hapticPos(0, 0, 0);
     hapticDevice->getPosition(hapticPos);
 
@@ -1430,30 +1418,29 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
     cVector3d hapticVel(0, 0, 0);
     hapticDevice->getLinearVelocity(hapticVel);
 
-    if (lock_x) *forcex = Kp * (posX.x() - hapticPos.x()) - Kv * hapticVel.x();
-    else if (!lock_x)  *forcex = 0;
+    if (lock_x) *forcex += K_axis * (posX.x() - hapticPos.x());
+    else if (!lock_x)  *forcex += 0;
 
-    if (lock_y) *forcey = Kp * (posY.y() - hapticPos.y()) - Kv * hapticVel.y();
-    else if (!lock_y) *forcey = 0;
+    if (lock_y) *forcey += K_axis * (posY.y() - hapticPos.y());
+    else if (!lock_y) *forcey += 0;
 
-    if (lock_z) *forcez = Kp * (posZ.z() - hapticPos.z()) - Kv * hapticVel.x();
-    else if (!lock_z) *forcez = 0;
+    if (lock_z) *forcez += K_axis * (posZ.z() - hapticPos.z());
+    else if (!lock_z) *forcez += 0;
+
+    return;
 }
 
 void auto_scan(void) {
     if (scan_x == true || scan_y == true || scan_z == true) {
         static int i = 0;
-        if (i % 100 == 0) {
-            cVector3d robotPosition;
-            robotDevice->getPosition(robotPosition);
-            robotPosition = robotRot * robotPosition;
-            if (scan_x) outFile << robotPosition.x() << "," << voltageLevel << endl;
+        if (i % 10 == 0) {
+            if (scan_x) outFile << robotPosCur.x() << "," << voltageLevel << endl;
             else if (scan_y) {
-                outFile << robotPosition.y() << "," << voltageLevel << endl;
+                outFile << robotPosCur.y() << "," << voltageLevel << endl;
             }
             else if (scan_z) {
-                outFile << robotPosition.z() << "," << voltageLevel << endl;
-                maxSignal = updateMax(robotPosition, voltageLevel, maxPosition, false);
+                outFile << robotPosCur.z() << "," << voltageLevel << endl;
+                maxSignal = updateMax(robotPosCur, voltageLevel, maxPosition, false);
                 threshold = 0.2 * maxSignal;
             }
             outFile.flush();
@@ -1463,20 +1450,15 @@ void auto_scan(void) {
         }
         i++;
 
-        // compute a haptic damping factor based on laser signal
-        double dampingGain = 0.2;
-        hapticDampingFactor = dampingGain * voltageLevel;
-
         //find the focus plane
         cVector3d maxPos;
         cVector3d scan_vector(0, 0, 0);
 
         if (scan_x) scan_vector.set(0.0000001, 0, 0);
         else if (scan_y) scan_vector.set(0, 0.0000001, 0);
-        else if (scan_z) scan_vector.set(0, 0, 0.00000001);
-        robotPosDes = robotPosDes + scan_vector;
-        //cout << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
-        static cVector3d robotPosition;
-        robotDevice->getPosition(robotPosition);
+        else if (scan_z) scan_vector.set(0, 0, 0.000001);
+        if(abs(robotPosDes.y()-robotPosCur.y()) < 0.01) robotPosDes = robotPosDes + scan_vector;
+        cout << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
     }
+    return;
 }
