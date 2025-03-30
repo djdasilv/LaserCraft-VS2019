@@ -253,6 +253,7 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 void close(void);
 void axis_locking(double* forcex, double* forcey, double* forcez);
 void auto_scan(void);
+void draw_pixels(void);
 
 //==============================================================================
 /*
@@ -276,6 +277,7 @@ bool lock_z = false;
 cVector3d posX, posY, posZ;
 double maxSignal;
 cVector3d maxPosition;
+bool scan_finished(false);
 
 int main(int argc, char* argv[])
 {
@@ -772,6 +774,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                 scan_y = !scan_y;
                 break;
             case GLFW_KEY_J:
+                if (scan_z) scan_finished = true;
                 scan_z = !scan_z;
                 break;
             default:
@@ -884,29 +887,7 @@ void close(void)
 
 void updateGraphics(void)
 {
-    /////////////////////////////////////////////////////////////////////
-    // UPDATE VOXELS
-    /////////////////////////////////////////////////////////////////////
-    // Declare a random number generator and distribution
-    std::mt19937 rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    std::uniform_real_distribution<double> distX(object->m_minCorner.x(), object->m_maxCorner.x());
-    std::uniform_real_distribution<double> distY(object->m_minCorner.y(), object->m_maxCorner.y());
-    std::uniform_real_distribution<double> distZ(object->m_minCorner.z(), object->m_maxCorner.z());
-    std::uniform_int_distribution<int> colorDist(0, 255);
-
-    // Generate random voxel position
-    double randomX = distX(rng);
-    double randomY = distY(rng);
-    double randomZ = distZ(rng);
-
-    cVector3d randomPosition(randomX, randomY, randomZ);
-
-    // Generate a random color (RGBA)
-    cColorb randomColor(colorDist(rng), colorDist(rng), colorDist(rng), 255);
-
-    // Set the voxel color at the random position
-    setVoxel(randomPosition, randomColor);
-
+  
     /////////////////////////////////////////////////////////////////////
     // UPDATE WIDGETS
     /////////////////////////////////////////////////////////////////////
@@ -1146,15 +1127,7 @@ void updateSensor(void)
             // display data to scope
             scope->setSignalValues(voltageLevel);
 
-            // draw a voxel if voltage level reaches a certain value
-            if (!scan_z) {
-                //if (voltageLevel > threshold)
-                //{
-                cColorb color(255, 255, 255, 1);
-                //setVoxel(robotPosCur - offset, color);
-                setVoxel(cursorRobotPosDes->getGlobalPos(), color);
-                //}
-            }     
+            //draw_pixels();
 
             //compute gradient along direction of travel:
             double intensityAtPoint1=0;
@@ -1262,6 +1235,7 @@ void updateRobotDevice(void)
         // apply force after taking into account rotation matrix of robot
         robotDevice->setForce(cTranspose(robotRot) * force);
 
+        draw_pixels();
 
         // update frequency counter
         freqCounterRobotDevice.signal();
@@ -1486,4 +1460,38 @@ void auto_scan(void) {
         cout << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
     }
     return;
+}
+
+void draw_pixels(void) {
+    // draw a voxel if voltage level reaches a certain value
+    if (!scan_z && scan_finished) {
+        cColorb color;
+        if (voltageLevel > 0.9 * threshold) {
+            color.set(255, 165, 0, 200);  // Opaque Red
+        }
+        else if (voltageLevel > 0.7 * threshold) {
+            color.set(255, 165, 0, 200);  // Orange (less opaque)
+        }
+        else if (voltageLevel > 0.5 * threshold) {
+            color.set(255, 255, 0, 150);  // Yellow (more transparent)
+        }
+        else if (voltageLevel > 0.2 * threshold) {
+            color.set(0, 255, 0, 100);  // Green (even more transparent)
+        }
+        else if (voltageLevel > 0.05 * threshold) {
+            color.set(255, 255, 255, 50);  // Very transparent white
+        }
+        else {
+            color.set(255, 255, 255, 20);  // Extremely transparent white
+        }
+
+         /*
+        static cVector3d posi(-0, -0, -0);
+        posi = posi + cVector3d(0.000001, 0.000001, 0.000001);
+        setVoxel(posi, color);
+        */
+        setVoxel(robotPosCur-offset, color);
+
+    }
+
 }
