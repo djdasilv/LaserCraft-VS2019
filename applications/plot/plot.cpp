@@ -12,6 +12,7 @@
 #include <iostream>
 #include <fstream>
 #include "Data_process.h"
+#include <random>
 
 using namespace chai3d;
 using namespace std;
@@ -883,6 +884,29 @@ void close(void)
 void updateGraphics(void)
 {
     /////////////////////////////////////////////////////////////////////
+    // UPDATE VOXELS
+    /////////////////////////////////////////////////////////////////////
+    // Declare a random number generator and distribution
+    std::mt19937 rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    std::uniform_real_distribution<double> distX(object->m_minCorner.x(), object->m_maxCorner.x());
+    std::uniform_real_distribution<double> distY(object->m_minCorner.y(), object->m_maxCorner.y());
+    std::uniform_real_distribution<double> distZ(object->m_minCorner.z(), object->m_maxCorner.z());
+    std::uniform_int_distribution<int> colorDist(0, 255);
+
+    // Generate random voxel position
+    double randomX = distX(rng);
+    double randomY = distY(rng);
+    double randomZ = distZ(rng);
+
+    cVector3d randomPosition(randomX, randomY, randomZ);
+
+    // Generate a random color (RGBA)
+    cColorb randomColor(colorDist(rng), colorDist(rng), colorDist(rng), 255);
+
+    // Set the voxel color at the random position
+    setVoxel(randomPosition, randomColor);
+
+    /////////////////////////////////////////////////////////////////////
     // UPDATE WIDGETS
     /////////////////////////////////////////////////////////////////////
 
@@ -964,14 +988,14 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color)
     int numVoxelZ = image->getImageCount();
 
     // compute voxel indices
-    int voxelIndexX = (double)((a_pos.x() - object->m_minCorner.x()) * numVoxelX) / sizeX;
-    int voxelIndexY = (double)((a_pos.y() - object->m_minCorner.y()) * numVoxelY) / sizeY;
-    int voxelIndexZ = (double)((a_pos.z() - object->m_minCorner.z()) * numVoxelZ) / sizeZ;
+    int voxelIndexX = (int)((a_pos.x() - object->m_minCorner.x()) * numVoxelX / sizeX);
+    int voxelIndexY = (int)((a_pos.y() - object->m_minCorner.y()) * numVoxelY / sizeY);
+    int voxelIndexZ = (int)((a_pos.z() - object->m_minCorner.z()) * numVoxelZ / sizeZ);
 
     // clamp index values within image volume
-    voxelIndexX = cClamp(voxelIndexX, 0, numVoxelX);
-    voxelIndexY = cClamp(voxelIndexY, 0, numVoxelY);
-    voxelIndexZ = cClamp(voxelIndexZ, 0, numVoxelZ);
+    voxelIndexX = cClamp(voxelIndexX, 0, numVoxelX - 1);
+    voxelIndexY = cClamp(voxelIndexY, 0, numVoxelY - 1);
+    voxelIndexZ = cClamp(voxelIndexZ, 0, numVoxelZ - 1);
 
     // update voxel color
     object->m_texture->m_image->setVoxelColor(voxelIndexX, voxelIndexY, voxelIndexZ, a_color);
@@ -1119,7 +1143,7 @@ void updateSensor(void)
             // display data to scope
             scope->setSignalValues(voltageLevel);
 
-           // draw a voxel if voltage level reaches a certain value
+            // draw a voxel if voltage level reaches a certain value
             if (!scan_z) {
                 if (voltageLevel > threshold)
                 {
@@ -1217,6 +1241,8 @@ void updateRobotDevice(void)
     // get time point 0
     chrono::high_resolution_clock::time_point timePoint0 = chrono::high_resolution_clock::now();
 
+    
+
     // main robot control loop
     while (simulationRunning)
     {
@@ -1224,7 +1250,6 @@ void updateRobotDevice(void)
 
         chrono::high_resolution_clock::time_point timePoint1 = chrono::high_resolution_clock::now();
         double timeInSeconds = chrono::duration<double>(timePoint1 - timePoint0).count();
-
 
         // get current position of robot
         cVector3d pos(0, 0, 0);
