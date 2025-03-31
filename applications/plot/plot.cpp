@@ -278,6 +278,7 @@ cVector3d posX, posY, posZ;
 double maxSignal;
 cVector3d maxPosition;
 bool scan_finished(false);
+void reset_pixels();
 
 int main(int argc, char* argv[])
 {
@@ -303,8 +304,9 @@ int main(int argc, char* argv[])
     cout << "[x] - Lock translation in x direction" << endl;
     cout << "[y] - Lock translation in y direction" << endl;
     cout << "[z] - Lock translation in z direction" << endl;
-    cout << "[r] - Inverse bulk and structure haptic" << endl;
     cout << "[t] - Move to surface of the sample" << endl;
+    cout << "[u] - Draw voxels" << endl;
+    cout << "[r] - Reset all voxels" << endl;
     cout << "[S] - Set new maximum obtained voltage [V]. Default set to 2 V." << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
@@ -703,6 +705,11 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         cout << "Moved to :" << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
 
     }
+    //Resets all voxels if R key is pressed
+    if (a_key == GLFW_KEY_R && a_action == GLFW_PRESS)
+    {
+        reset_pixels();
+    }
 
     //Lock X translation
     if (a_key == GLFW_KEY_X && (a_action != GLFW_PRESS))
@@ -735,7 +742,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     //Warning: old file is written over each time this mode is activated
     if ((a_key == GLFW_KEY_G || a_key == GLFW_KEY_H || a_key == GLFW_KEY_J) && (a_action == GLFW_PRESS))
     {
-        
         if (((!scan_x) && a_key == GLFW_KEY_G) || ((!scan_y) && a_key == GLFW_KEY_H) || (!scan_z && a_key == GLFW_KEY_J)) {
             outFile.open("output.csv", std::ios::trunc);
             if (outFile.is_open()) {
@@ -757,7 +763,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                     default:
                         break;
                 }
-                std::cout << "Data appended to output.csv successfully." << std::endl;
+                cout << "Data appended to output.csv successfully." << endl;
             }
             else cout << "Error opening file." << std::endl;
         }
@@ -774,7 +780,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                 scan_y = !scan_y;
                 break;
             case GLFW_KEY_J:
-                if (scan_z) scan_finished = true;
                 scan_z = !scan_z;
                 break;
             default:
@@ -786,6 +791,14 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
 
     }
 
+    //Toggles the pixel coloring update
+    if ((a_key == GLFW_KEY_U) && (a_action == GLFW_PRESS))
+    {
+        if (scan_finished) scan_finished = false;
+        else scan_finished = true;
+
+        cout << scan_finished << endl;
+    }
 
     // filter calls that only include a key press
     if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
@@ -1464,8 +1477,9 @@ void auto_scan(void) {
 
 void draw_pixels(void) {
     // draw a voxel if voltage level reaches a certain value
+    cout << scan_z << " " << scan_finished << endl;
     if (!scan_z && scan_finished) {
-        cColorb color;
+        cColorb color(255,255,255);
         if (voltageLevel > 0.9 * threshold) {
             color.set(255, 165, 0, 200);  // Opaque Red
         }
@@ -1485,13 +1499,37 @@ void draw_pixels(void) {
             color.set(255, 255, 255, 20);  // Extremely transparent white
         }
 
-         /*
+        
         static cVector3d posi(-0, -0, -0);
         posi = posi + cVector3d(0.000001, 0.000001, 0.000001);
         setVoxel(posi, color);
-        */
+        
         setVoxel(robotPosCur-offset, color);
 
     }
 
+}
+
+void reset_pixels() {
+    // Get volume dimensions
+    int numVoxelX = object->m_texture->m_image->getWidth();
+    int numVoxelY = object->m_texture->m_image->getHeight();
+    int numVoxelZ = object->m_texture->m_image->getImageCount();
+
+    // Loop through all voxels and set them to the reset color
+    for (int x = 0; x < numVoxelX; x++) {
+        for (int y = 0; y < numVoxelY; y++) {
+            for (int z = 0; z < numVoxelZ; z++) {
+                object->m_texture->m_image->setVoxelColor(x, y, z, cColorb(0,0,0,0));
+            }
+        }
+    }
+
+    // Mark the whole volume for update
+    mutexVoxel.acquire();
+    volumeUpdate.enclose(cVector3d(0, 0, 0));
+    volumeUpdate.enclose(cVector3d(numVoxelX - 1, numVoxelY - 1, numVoxelZ - 1));
+    mutexVoxel.release();
+
+    flagMarkVolumeForUpdate = true;
 }
