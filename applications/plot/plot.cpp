@@ -251,8 +251,18 @@ void setVoxel(cVector3d& a_pos, cColorb& a_color);
 
 // this function closes the application
 void close(void);
+
+// This function locks restricts mouvement along x,y or z  axis
+// by applying a spring force to the axis coordinate, that is set when
+// user presses the button.
 void axis_locking(double* forcex, double* forcey, double* forcez);
+
+// This function does a z-axis sweep across the sample to the find the 
+// maximum z-coordinate, which corresponds to the surface of the sample
 void auto_scan(void);
+
+//Ths fuction draws colored pixels at the robots position 
+// according to the voltage reading signal
 void draw_pixels(void);
 
 //==============================================================================
@@ -269,6 +279,8 @@ void draw_pixels(void);
 */
 //==============================================================================
 
+
+//Added variables and functions (to be sorted)
 ofstream outFile;
 bool reverseMode=false;
 bool lock_y = false;
@@ -1130,8 +1142,8 @@ void updateSensor(void)
             voltageLevel = 5.0 * (((double)(dataValue)-2048.0) / 964.0);
             
             //Apply a gaussian filter to smoothen sensor values
-            static GaussianFilter filter;
-            //voltageLevel = filter.applyFilter(voltageLevel);
+            static KalmanFilter filter(voltageLevel,0.1,0.2);
+            voltageLevel = filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
             double dampingGain = 0.4;
@@ -1421,6 +1433,9 @@ void updateHapticDevice(void)
     hapticDevice->close();
 }
 
+// This function locks restricts mouvement along x,y or z  axis
+// by applying a spring force to the axis coordinate, that is set when
+// user presses the button.
 void axis_locking(double* forcex, double* forcey, double* forcez) {
     double K_axis = 2000, Kv = 5;
     cVector3d hapticPos(0, 0, 0);
@@ -1442,6 +1457,8 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
     return;
 }
 
+// This function does a z-axis sweep across the sample to the find the 
+// maximum z-coordinate, which corresponds to the surface of the sample
 void auto_scan(void) {
     if (scan_x == true || scan_y == true || scan_z == true) {
         static int i = 0;
@@ -1475,6 +1492,8 @@ void auto_scan(void) {
     return;
 }
 
+//Ths fuction draws colored pixels at the robots position 
+// according to the voltage reading signal
 void draw_pixels(void) {
     // draw a voxel if voltage level reaches a certain value
     cout << scan_z << " " << scan_finished << endl;
@@ -1510,6 +1529,7 @@ void draw_pixels(void) {
 
 }
 
+//This function resest all drawn pixels 
 void reset_pixels() {
     // Get volume dimensions
     int numVoxelX = object->m_texture->m_image->getWidth();
