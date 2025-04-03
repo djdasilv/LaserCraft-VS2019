@@ -153,7 +153,7 @@ cStateScanx StateScanx = STATE_FORWARD_X;
 // state scan y
 cStateScany StateScany = STATE_FORWARD_Y;
 
-double threshold = 2;
+double threshold = 5;
 
 //------------------------------------------------------------------------------
 // CHAI3D GRAPHIC VARIABLES AND OBJECTS
@@ -317,9 +317,12 @@ int main(int argc, char* argv[])
     cout << "[y] - Lock translation in y direction" << endl;
     cout << "[z] - Lock translation in z direction" << endl;
     cout << "[t] - Move to surface of the sample" << endl;
+    cout << "[t] - X-axis Scan" << endl;
+    cout << "[t] - Y-axis scan" << endl;
+    cout << "[t] - Z-axis scan" << endl;
     cout << "[u] - Draw voxels" << endl;
     cout << "[r] - Reset all voxels" << endl;
-    cout << "[S] - Set new maximum obtained voltage [V]. Default set to 2 V." << endl;
+    cout << "[S] - Set new maximum obtained voltage [V]. Default set to 5 V. Can also be found doing a z scan (press[j])" << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
 
@@ -496,7 +499,7 @@ int main(int argc, char* argv[])
     // set cursor color
     cursorRobotPosDesScan->m_material->setRed();
 
-
+    //Is this even useful?
 
     //--------------------------------------------------------------------------
     // CREATE VOXEL OBJECT
@@ -520,7 +523,7 @@ int main(int argc, char* argv[])
     object->m_maxTextureCoord.set(1.0, 1.0, 1.0);
 
     // set material color
-    object->m_material->setOrangeCoral();
+    //object->m_material->setOrangeCoral();
     // show/hide boundary box
     object->setShowBoundaryBox(true);
 
@@ -715,6 +718,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         robotPosDes = maxPosition;
         cout << "Moved to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
         cout << "Moved to :" << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
+        cout << "Moved to :" << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
 
     }
     //Resets all voxels if R key is pressed
@@ -851,7 +855,7 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     // option - reset offset
     if (a_key == GLFW_KEY_C)
     {
-        offset = robotPosDes;
+        offset = robotPosCur;
     }
 
     // option - toggle fullscreen
@@ -932,7 +936,7 @@ void updateGraphics(void)
 
     labelGradient->setText("X scan: " + cStr(scan_x) + "  /  " +
         "Y Scan : " + cStr(scan_y) + "  /  " +
-        "Z Scan : " + cStr(scan_z));
+        "Z Scan : " + cStr(scan_z) + "/ Voltage: " + cStr(voltageLevel,5));
 
     /////////////////////////////////////////////////////////////////////
     // VOLUME UPDATE
@@ -1151,8 +1155,7 @@ void updateSensor(void)
             
             // display data to scope
             scope->setSignalValues(voltageLevel);
-
-            //draw_pixels();
+            //cout<<"voltage: " << voltageLevel << endl;
 
             //compute gradient along direction of travel:
             double intensityAtPoint1=0;
@@ -1437,7 +1440,7 @@ void updateHapticDevice(void)
 // by applying a spring force to the axis coordinate, that is set when
 // user presses the button.
 void axis_locking(double* forcex, double* forcey, double* forcez) {
-    double K_axis = 2000, Kv = 5;
+    double K_axis = 2000, Kd = 5;
     cVector3d hapticPos(0, 0, 0);
     hapticDevice->getPosition(hapticPos);
 
@@ -1445,13 +1448,20 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
     cVector3d hapticVel(0, 0, 0);
     hapticDevice->getLinearVelocity(hapticVel);
 
-    if (lock_x) *forcex += K_axis * (posX.x() - hapticPos.x());
+    // Compute the velocity error (rate of change of error)
+    cVector3d velocityError = cVector3d(
+        lock_x ? hapticVel.x() : 0,
+        lock_y ? hapticVel.y() : 0,
+        lock_z ? hapticVel.z() : 0
+    );
+
+    if (lock_x) *forcex += cClamp(K_axis * (posX.x() - hapticPos.x())- Kd*velocityError.x(),-30.0,30.0);
     else if (!lock_x)  *forcex += 0;
 
-    if (lock_y) *forcey += K_axis * (posY.y() - hapticPos.y());
+    if (lock_y) *forcey += cClamp(K_axis * (posY.y() - hapticPos.y()) - Kd * velocityError.y(),-30.0,30.0);
     else if (!lock_y) *forcey += 0;
 
-    if (lock_z) *forcez += K_axis * (posZ.z() - hapticPos.z());
+    if (lock_z) *forcez += cClamp(K_axis * (posZ.z() - hapticPos.z()) - Kd * velocityError.z(),-30.0,30.0);
     else if (!lock_z) *forcez += 0;
 
     return;
@@ -1470,7 +1480,7 @@ void auto_scan(void) {
             else if (scan_z) {
                 outFile << robotPosCur.z() << "," << voltageLevel << endl;
                 maxSignal = updateMax(robotPosCur, voltageLevel, maxPosition, false);
-                threshold = 0.2 * maxSignal;
+                //threshold = maxSignal;
             }
             outFile.flush();
 
@@ -1486,9 +1496,11 @@ void auto_scan(void) {
         if (scan_x) scan_vector.set(0.0000001, 0, 0);
         else if (scan_y) scan_vector.set(0, 0.0000001, 0);
         else if (scan_z) scan_vector.set(0, 0, 0.000001);
-        if(abs(robotPosDes.y()-robotPosCur.y()) < 0.01) robotPosDes = robotPosDes + scan_vector;
-        cout << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
+        
+        robotPosDes = robotPosDes + scan_vector;
+        //cout <<"x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
     }
+    cout << "x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
     return;
 }
 
@@ -1496,11 +1508,10 @@ void auto_scan(void) {
 // according to the voltage reading signal
 void draw_pixels(void) {
     // draw a voxel if voltage level reaches a certain value
-    cout << scan_z << " " << scan_finished << endl;
     if (!scan_z && scan_finished) {
-        cColorb color(255,255,255);
+        cColorb color;
         if (voltageLevel > 0.9 * threshold) {
-            color.set(255, 165, 0, 200);  // Opaque Red
+            color.set(255, 0, 0, 255);  // Opaque Red
         }
         else if (voltageLevel > 0.7 * threshold) {
             color.set(255, 165, 0, 200);  // Orange (less opaque)
@@ -1517,13 +1528,8 @@ void draw_pixels(void) {
         else {
             color.set(255, 255, 255, 20);  // Extremely transparent white
         }
-
         
-        static cVector3d posi(-0, -0, -0);
-        posi = posi + cVector3d(0.000001, 0.000001, 0.000001);
-        setVoxel(posi, color);
-        
-        setVoxel(robotPosCur-offset, color);
+        setVoxel(robotPosDes-offset, color);
 
     }
 
