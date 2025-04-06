@@ -85,14 +85,17 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
 
         // Set up the matrix A with the displacement vectors
         Eigen::Matrix3d A;
-        A.row(0) = Eigen::Vector3d( last_values[0].RobotPos.x(), last_values[0].RobotPos.y(), 
-                                    last_values[0].RobotPos.z()).transpose();
+        A.row(0) = Eigen::Vector3d(last_values[0].RobotPos.x() - currentRobotPosition.x(),
+            last_values[0].RobotPos.y() - currentRobotPosition.y(),
+            last_values[0].RobotPos.z() - currentRobotPosition.z()).transpose();
 
-        A.row(1) = Eigen::Vector3d( last_values[1].RobotPos.x(), last_values[1].RobotPos.y(), 
-                                    last_values[1].RobotPos.z()).transpose();
+        A.row(1) = Eigen::Vector3d(last_values[1].RobotPos.x() - currentRobotPosition.x(),
+            last_values[1].RobotPos.y() - currentRobotPosition.y(),
+            last_values[1].RobotPos.z() - currentRobotPosition.z()).transpose();
 
-        A.row(2) = Eigen::Vector3d( last_values[2].RobotPos.x(), last_values[2].RobotPos.y(),
-                                    last_values[2].RobotPos.z()).transpose();
+        A.row(2) = Eigen::Vector3d(last_values[2].RobotPos.x() - currentRobotPosition.x(),
+            last_values[2].RobotPos.y() - currentRobotPosition.y(),
+            last_values[2].RobotPos.z() - currentRobotPosition.z()).transpose();
 
         // Set up the vector b with the voltage differences
         Eigen::Vector3d b;

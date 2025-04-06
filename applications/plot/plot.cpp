@@ -1143,7 +1143,7 @@ void updateSensor(void)
             }
             
             // convert data value to a sensor voltage level
-            voltageLevel = 5.0 * (((double)(dataValue)-2048.0) / 964.0);
+            voltageLevel = cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0);
             
             //Apply a gaussian filter to smoothen sensor values
             static KalmanFilter filter(voltageLevel,0.1,0.2);
