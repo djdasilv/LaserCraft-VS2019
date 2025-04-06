@@ -28,3 +28,5 @@ public:
 
 double updateMax(cVector3d position,double voltage,cVector3d& maxPos, bool reset) ;
 
+cVector3d computeGradient(cVector3d currentRobotPosition, double current_voltage);
+

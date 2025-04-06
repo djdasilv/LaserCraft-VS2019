@@ -1155,49 +1155,9 @@ void updateSensor(void)
             
             // display data to scope
             scope->setSignalValues(voltageLevel);
-            //cout<<"voltage: " << voltageLevel << endl;
 
-            //compute gradient along direction of travel:
-            double intensityAtPoint1=0;
-            double intensityAtPoint2=0;
-            if (stateGradient == STATE_AQUIREPOINT1)
-            {
-
-                intensityAtPoint1 = voltageLevel;//save voltage intensity at the current position of the robot
-                robotDevice->getPosition(P1); //save current position of the robot
-                stateGradient = STATE_AQUIREPOINT2;
-             
-
-            }
-            else if (stateGradient == STATE_AQUIREPOINT2)
-            {   
-                
-                cVector3d deltaVector;
-                robotDevice->getPosition(P2);//save current position of the robot
-                deltaVector= P2 - P1;// calcul of the displacement in z-axis
-
-                if (deltaVector.length() > deltaz)// check if the displacement in z-axis is big enough to calulate a gradient 
-                {
-                    intensityAtPoint2 = voltageLevel;
-                    float gradX, gradY, gradZ;
-                    if (deltaVector.x() > deltaz)  gradX = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.x());
-                    else gradX = 0;
-                    if (deltaVector.y() > deltaz)  gradY = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.y());
-                    else gradY = 0;
-                    if (deltaVector.z() > deltaz)  gradZ = ((intensityAtPoint2 - intensityAtPoint1) / deltaVector.z());
-                    else gradZ = 0;
-                    cVector3d temp(gradX, gradY , gradZ);
-                    voltageGradient = temp; //calculate the gradient
-                    //gradientData.push_back(gradient);
-                    stateGradient = STATE_AQUIREPOINT1;
-                }
-                else
-                {
-                    stateGradient = STATE_AQUIREPOINT2;
-                }
-
-
-            }
+            //compute gradient along direction of travel
+          
         }
 
         // update frequency counter
@@ -1250,6 +1210,13 @@ void updateRobotDevice(void)
         // update variables by taking into account rotation matrix of robot
         robotPosCur = robotRot * pos;
         robotVelCur = robotRot * vel;
+
+        // compute signal gradient
+        cVector3d gradient(0,0,0);
+        if (voltageLevel > 0.00000001) {
+            gradient = voltageLevel*computeGradient(robotPosCur, voltageLevel);
+        }
+        cout << "dx: " << gradient.x() << ", dy: " << gradient.y() << ", dz: " << gradient.z() << endl;
 
         // compute spring force to move robot toward desired position (robotPosDes) 
         double Kp = 200;
@@ -1455,13 +1422,13 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
         lock_z ? hapticVel.z() : 0
     );
 
-    if (lock_x) *forcex += cClamp(K_axis * (posX.x() - hapticPos.x())- Kd*velocityError.x(),-30.0,30.0);
+    if (lock_x) *forcex += cClamp(K_axis * (posX.x() - hapticPos.x()),-30.0,-30.0);      //)- Kd*velocityError.x(),-30.0,30.0);
     else if (!lock_x)  *forcex += 0;
 
-    if (lock_y) *forcey += cClamp(K_axis * (posY.y() - hapticPos.y()) - Kd * velocityError.y(),-30.0,30.0);
+    if (lock_y) *forcey += cClamp(K_axis * (posY.y() - hapticPos.y()), -30.0, - 30.0);      // -Kd * velocityError.y(), -30.0, 30.0);
     else if (!lock_y) *forcey += 0;
 
-    if (lock_z) *forcez += cClamp(K_axis * (posZ.z() - hapticPos.z()) - Kd * velocityError.z(),-30.0,30.0);
+    if (lock_z) *forcez += cClamp(K_axis * (posZ.z() - hapticPos.z()), -30.0, - 30.0);      // -Kd * velocityError.z(), -30.0, 30.0);
     else if (!lock_z) *forcez += 0;
 
     return;
@@ -1500,7 +1467,7 @@ void auto_scan(void) {
         robotPosDes = robotPosDes + scan_vector;
         //cout <<"x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
     }
-    cout << "x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
+    //cout << "x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
     return;
 }
 

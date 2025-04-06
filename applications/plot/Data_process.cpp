@@ -46,23 +46,35 @@ double updateMax(cVector3d position, double voltage,cVector3d& maxPos,bool reset
     return maxVoltage;
 }
 
-struct spacialVoltage
+struct signal3d
 {
     cVector3d RobotPos;
     double signal_value;
-   spacialVoltage(cVector3d position, double value) {
-        RobotPos = position;
+    signal3d(cVector3d position, double value) {
+        RobotPos=position;
         signal_value = value;
     }
 };
 
 
 cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage ) {
-    static std::deque<spacialVoltage> last_values;
-    spacialVoltage tmp(currentRobotPosition, current_voltage);
+    static std::deque<signal3d> last_values;
+    signal3d tmp(currentRobotPosition, current_voltage);
+    
+    // Check if currentRobotPosition is already in last_values
+    bool isValid = true;
+    double delta = 0.00001; //m
+    for (const auto& entry : last_values) {
+        if (entry.RobotPos.equals(currentRobotPosition) || entry.RobotPos.distance(currentRobotPosition) < delta) {
+            isValid = false;
+            break;
+        }
+    }
+    
     if (last_values.size() < 3) {
-        last_values.push_back(tmp);
+        if (isValid)   last_values.push_back(tmp);
         return cVector3d(0, 0, 0);
+       
     }
     else {
         // Sample voltages at the three points
@@ -91,10 +103,13 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
 
         // Convert the gradient to a CHAI3D vector (cVector3d)
         cVector3d gradient(grad[0], grad[1], grad[2]);
+        gradient.normalize();
 
         // Add current position and voltage and remove the last one
-        last_values.push_back(tmp);
-        last_values.pop_front();
+        if (isValid) {
+            last_values.push_back(tmp);
+            last_values.pop_front();
+        }
 
         return gradient;
     
