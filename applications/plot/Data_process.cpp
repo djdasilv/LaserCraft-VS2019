@@ -1,27 +1,47 @@
 #include "Data_process.h"
 
-// Constructor: Initializes the Kalman filter
-KalmanFilter::KalmanFilter(double init_voltage, double process_noise, double measurement_noise):   
-        estimated_voltage(init_voltage), 
-        estimation_error(1.0), 
-        process_noise(process_noise), 
-        measurement_noise(measurement_noise) {}
+#include <numeric>
 
-// Apply the Kalman filter to a new voltage measurement
-double KalmanFilter::applyFilter(double new_measurement) {
-    // Prediction step (no control model, just holding the state constant)
-
-    // Kalman gain calculation
-    kalman_gain = estimation_error / (estimation_error + measurement_noise);
-
-    // Update the estimate with the new measurement
-    estimated_voltage = estimated_voltage + kalman_gain * (new_measurement - estimated_voltage);
-
-    // Update estimation error
-    estimation_error = (1 - kalman_gain) * estimation_error + process_noise;
-
-    return estimated_voltage;
+GaussianFilter::GaussianFilter(int window_size, double sigma)
+    : window_size(window_size), index(0), filled(false) {
+    buffer.resize(window_size, 0.0);
+    weights.resize(window_size);
+    calculateWeights(sigma);
 }
+
+void GaussianFilter::calculateWeights(double sigma) {
+    int mid = window_size / 2;
+    double sum = 0.0;
+
+    for (int i = 0; i < window_size; ++i) {
+        int x = i - mid;
+        weights[i] = std::exp(-0.5 * (x * x) / (sigma * sigma));
+        sum += weights[i];
+    }
+
+    // Normalize weights
+    for (int i = 0; i < window_size; ++i) {
+        weights[i] /= sum;
+    }
+}
+
+double GaussianFilter::applyFilter(double new_measurement) {
+    buffer[index] = new_measurement;
+    index = (index + 1) % window_size;
+
+    int count = filled ? window_size : index;
+    double filtered_value = 0.0;
+
+    for (int i = 0; i < count; ++i) {
+        int weight_index = (i - index + window_size) % window_size;
+        filtered_value += buffer[i] * weights[weight_index];
+    }
+
+    if (!filled && index == 0) filled = true;
+
+    return filtered_value;
+}
+
 
 double updateMax(cVector3d position, double voltage,cVector3d& maxPos,bool reset) {
     static std::deque<cVector3d> lastPositions;
@@ -64,8 +84,10 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
     // Check if currentRobotPosition is already in last_values
     bool isValid = true;
     double delta = 0.00001; //m
+    double voltagNoiseThreshold = 0.01; //V
     for (const auto& entry : last_values) {
-        if (entry.RobotPos.equals(currentRobotPosition) || entry.RobotPos.distance(currentRobotPosition) < delta) {
+        if (entry.RobotPos.equals(currentRobotPosition) || entry.RobotPos.distance(currentRobotPosition) < delta)
+        {
             isValid = false;
             break;
         }

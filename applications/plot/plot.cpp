@@ -61,7 +61,6 @@ enum cStateScany
 bool scan_x = false;
 bool scan_y = false;
 bool scan_z = false;
-double gradient;
 double deltaz = 0.00005; // chercher la bonne valeur !!
 cVector3d P1;
 double P1z;
@@ -291,6 +290,7 @@ double maxSignal;
 cVector3d maxPosition;
 bool scan_finished(false);
 void reset_pixels();
+cVector3d gradient(0, 0, 0);
 
 int main(int argc, char* argv[])
 {
@@ -936,7 +936,8 @@ void updateGraphics(void)
 
     labelGradient->setText("X scan: " + cStr(scan_x) + "  /  " +
         "Y Scan : " + cStr(scan_y) + "  /  " +
-        "Z Scan : " + cStr(scan_z) + "/ Voltage: " + cStr(voltageLevel,5));
+        "Z Scan : " + cStr(scan_z) + "/ Voltage: " + cStr(voltageLevel,5) + "  /  " +
+        "dU/dx: " + cStr(gradient.x()) + ", dU/dy: " + cStr(gradient.y()) + ", dU/dz: " + cStr(gradient.z()));
 
     /////////////////////////////////////////////////////////////////////
     // VOLUME UPDATE
@@ -1143,10 +1144,10 @@ void updateSensor(void)
             }
             
             // convert data value to a sensor voltage level
-            voltageLevel = cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0);
+            voltageLevel = round(10*cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0))/10;
             
             //Apply a gaussian filter to smoothen sensor values
-            static KalmanFilter filter(voltageLevel,0.1,0.2);
+            static GaussianFilter filter(100,5);
             voltageLevel = filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
@@ -1212,11 +1213,11 @@ void updateRobotDevice(void)
         robotVelCur = robotRot * vel;
 
         // compute signal gradient
-        cVector3d gradient(0,0,0);
+        
         if (voltageLevel > 0.00000001) {
             gradient = voltageLevel*computeGradient(robotPosCur, voltageLevel);
         }
-        cout << "dx: " << gradient.x() << ", dy: " << gradient.y() << ", dz: " << gradient.z() << endl;
+        
 
         // compute spring force to move robot toward desired position (robotPosDes) 
         double Kp = 200;
@@ -1361,6 +1362,18 @@ void updateHapticDevice(void)
                 // calculate damping force as proportional de haptic device velocity; add force to previously computed force
                 force += -cClamp( Kv * pow(voltageLevel,3)/ hapticVel.length(),0.0, 30.0)*hapticVel;
 
+                //////////////////////////////////////////////////////////////////////////////////////////////
+                // 
+                // compute a force on the 3d gradient of the signal.
+                // 
+                //////////////////////////////////////////////////////////////////////////////////////////////
+
+                double Kg = 1;
+                cVector3d normalGradient(0,0,0);
+                if (gradient.length() > 0) normalGradient = gradient / gradient.length();
+                force += -cClamp(Kg * voltageLevel * gradient.length(), 0.0, 30.0)* normalGradient;
+
+
             }
         }
 
@@ -1462,7 +1475,7 @@ void auto_scan(void) {
 
         if (scan_x) scan_vector.set(0.0000001, 0, 0);
         else if (scan_y) scan_vector.set(0, 0.0000001, 0);
-        else if (scan_z) scan_vector.set(0, 0, 0.000001);
+        else if (scan_z) scan_vector.set(0, 0, 0.0000001);
         
         robotPosDes = robotPosDes + scan_vector;
         //cout <<"x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;

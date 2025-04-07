@@ -76,7 +76,7 @@ def update_graph(n):
     # Create figure
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=new_x, y=new_y, mode='lines+markers', name='Raw Data'))
-    fig.add_trace(go.Scatter(x=smoothed_x, y=smoothed_y, mode='lines', name='Smoothed Data', line=dict(width=2)))
+    #fig.add_trace(go.Scatter(x=smoothed_x, y=smoothed_y, mode='lines', name='Smoothed Data', line=dict(width=2)))
     fig.add_trace(go.Scatter(x=peaks_x, y=peaks_y, mode='markers', name='Peaks', marker=dict(color='red', size=8)))
     fig.update_layout(title=f"Real-Time Data Plot (State: {state})")
 
