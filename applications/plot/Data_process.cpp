@@ -2,6 +2,8 @@
 
 #include <numeric>
 
+#define microns 0.000001 // used to convert meter to microns 
+
 GaussianFilter::GaussianFilter(int window_size, double sigma)
     : window_size(window_size), index(0), filled(false) {
     buffer.resize(window_size, 0.0);
@@ -83,8 +85,8 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
     
     // Check if currentRobotPosition is already in last_values
     bool isValid = true;
-    double delta = 0.00001; //m
-    double voltagNoiseThreshold = 0.01; //V
+    double delta = 10*microns; //m
+    double voltagNoiseThreshold = 0.1; //V
     for (const auto& entry : last_values) {
         if (entry.RobotPos.equals(currentRobotPosition) || entry.RobotPos.distance(currentRobotPosition) < delta)
         {
@@ -127,8 +129,7 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
         Eigen::Vector3d grad = A.colPivHouseholderQr().solve(b);
 
         // Convert the gradient to a CHAI3D vector (cVector3d)
-        cVector3d gradient(grad[0], grad[1], grad[2]);
-        gradient.normalize();
+        cVector3d gradient(grad[0] / 100, grad[1] / 100, grad[2] / 100);
 
         // Add current position and voltage and remove the last one
         if (isValid) {
