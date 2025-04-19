@@ -14,3 +14,6 @@ BigSampleXSWeepFull_18_3_25V2.csv - Same but in bulk
 BigSampleXSWeepFull_18_3_25V3.csv.csv - same same i think (?)
 MicroscopeSample_1mm_Kalman- Done on 7/4/ measurement of the glass 0.93mm with Kalman filter
 MicroscopeSample_GaussianWithRounding - Same just reading the 0.x decimals of the sensor and gaussian filtering
+GlassSampleUpwards - Simple glass scan in upwards robot direction
+
+FusedSilicaSamples - High intensity laser, triangulare shape to measure width in both directons too see that results is same despite direction

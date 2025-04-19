@@ -993,12 +993,12 @@ void updateSensor(void)
     int ULStat = 0;
     int LowChan = 0;
     int HighChan = 0;
-    int Range = UNI5VOLTS;
+    int Range = UNI10VOLTS;
     short Status = 0;
     long CurCount;
     long CurIndex;
     int Count = 100;
-    long Rate = 100000;
+    long Rate = 10000;
     unsigned Options;
     HANDLE MemHandle = 0;
     WORD* ADData;
@@ -1102,10 +1102,10 @@ void updateSensor(void)
             }
             
             // convert data value to a sensor voltage level
-            voltageLevel = round(10*cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0))/10;
+            voltageLevel = round(100*(5*(dataValue-2048)/1024.0))/100 ;//round(10*cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0))/10;
             
             //Apply a gaussian filter to smoothen sensor values
-            static GaussianFilter filter(100,5);
+            static GaussianFilter filter(100,100);
             voltageLevel = filter.applyFilter(voltageLevel);
 
             // compute a haptic damping factor based on laser signal
@@ -1169,11 +1169,11 @@ void updateRobotDevice(void)
         // compute signal gradient
         
         if (voltageLevel > 1) {
-            gradient = computeGradient(robotPosCur, voltageLevel);
+            //gradient = computeGradient(robotPosCur, voltageLevel);
         }
         
         // compute spring force to move robot toward desired position (robotPosDes) 
-        double Kp = 200;
+        double Kp = 2000;
         double Kv = 10;
         cVector3d force = Kp * (robotPosDes - robotPosCur) - Kv * robotVelCur;
         
@@ -1418,6 +1418,8 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
 // This function does a z-axis sweep across the sample to the find the 
 // maximum z-coordinate, which corresponds to the surface of the sample
 void auto_scan(void) {
+    cVector3d maxPos;
+    cVector3d scan_vector(0, 0, 0);
     if (scan_x == true || scan_y == true || scan_z == true) {
         static int i = 0;
         if (i % 10 == 0) {
@@ -1434,17 +1436,12 @@ void auto_scan(void) {
 
             i = 0;
 
+            
         }
         i++;
-
-        //find the focus plane
-        cVector3d maxPos;
-        cVector3d scan_vector(0, 0, 0);
-
-        if (scan_x) scan_vector.set(0.1*microns, 0, 0);
-        else if (scan_y) scan_vector.set(0, 0.1*microns, 0);
-        else if (scan_z) scan_vector.set(0, 0, 0.1*microns);
-        
+        if (scan_x) scan_vector.set(-0.1 * microns, 0, 0);
+        else if (scan_y) scan_vector.set(0, 0.1 * microns, 0);
+        else if (scan_z) scan_vector.set(0, 0, 0.1 * microns);
         robotPosDes = robotPosDes + scan_vector;
         //cout <<"x: " << robotPosCur.x() << ", y:  " << robotPosCur.y() << ",z : " << robotPosCur.z() << endl;
     }
