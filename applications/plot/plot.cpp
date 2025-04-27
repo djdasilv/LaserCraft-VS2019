@@ -114,7 +114,7 @@ cMutex mutexDevices;
 // state machine
 cState state;
 
-double threshold = 5;
+double threshold = 1;
 
 //------------------------------------------------------------------------------
 // CHAI3D GRAPHIC VARIABLES AND OBJECTS
@@ -253,6 +253,7 @@ cVector3d maxPosition;
 bool scan_finished(false);
 void reset_pixels();
 cVector3d gradient(0, 0, 0);
+cVector3d signalDiff(0, 0, 0);
 
 int main(int argc, char* argv[])
 {
@@ -1170,8 +1171,11 @@ void updateRobotDevice(void)
         
         if (voltageLevel > 1) {
             //gradient = computeGradient(robotPosCur, voltageLevel);
+
         }
         
+        signalDiff = computeSignalDif(robotPosCur, voltageLevel);
+
         // compute spring force to move robot toward desired position (robotPosDes) 
         double Kp = 2000;
         double Kv = 10;
@@ -1211,7 +1215,7 @@ void updateHapticDevice(void)
     hapticDevice->enableForces(true);
 
     // set spring stiffness constant
-    double Kp = 200;
+    double Kp = 2000;
 
     // main haptic control loop
     while (simulationRunning)
@@ -1312,40 +1316,30 @@ void updateHapticDevice(void)
                 //                                                                                                //
                 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-                // set spring stiffness constant
-                //double Kp = 200;
 
-                // compute spring force
+                // compute spring force to resist movement on haptic sidem if robot has not moved to that position
                 force = Kp * (robotPosCur - robotPosDes);
-                
 
-                //////////////////////////////////////////////////////////////////////////////////////////////
-                // 
-                // compute a viscous force based of the laser sensor data.
-                // 
-                //////////////////////////////////////////////////////////////////////////////////////////////
-
-                // set constant for viscous force 
+                // compute a viscous force based of the laser sensor dat
                 double Kv = 100;
 
                 // set damping factor based of hapticDampingFactor value computed in laser sensor thread; the value
-                // is clamped between 0.0 and 1.0 to avoid any instabilities from the haptic device
+                // is clamped between 0.0 and 1.0 to avoid any instabilities from the haptic dev
                 double damping = cClamp(hapticDampingFactor, 0.0, 1.0);
-                //double exp_coefficient = 0.01;
-                
                 // calculate damping force as proportional de haptic device velocity; add force to previously computed force
                 force += -cClamp( Kv * pow(voltageLevel,3)/ hapticVel.length(),0.0, 30.0)*hapticVel;
 
-                //////////////////////////////////////////////////////////////////////////////////////////////
-                // 
-                // compute a force based on the 3d gradient of the signal.
-                // 
-                //////////////////////////////////////////////////////////////////////////////////////////////
 
+                // compute a force based on the 3d gradient of the signal
                 double Kg = 1;
                 cVector3d unitGradient(0,0,0);
                 if (gradient.length() > 0) unitGradient = gradient / gradient.length();
                 force += -cClamp(Kg * voltageLevel * gradient.length(), -30.0, 30.0)* unitGradient;
+
+
+                // compute a force based on the difference of signal after a given displacement.
+                double Ki = 30;
+                force += Ki*signalDiff;
 
 
             }
@@ -1403,13 +1397,13 @@ void axis_locking(double* forcex, double* forcey, double* forcez) {
     hapticDevice->getLinearVelocity(hapticVel);
 
 
-    if (lock_x) *forcex += cClamp(K_axis * (posX.x() - hapticPos.x()),-30.0, 30.0);      //)- Kd*velocityError.x(),-30.0,30.0);
+    if (lock_x) *forcex += cClamp(K_axis * (posX.x() - hapticPos.x()),-30.0, 30.0); 
     else if (!lock_x)  *forcex += 0;
 
-    if (lock_y) *forcey += cClamp(K_axis * (posY.y() - hapticPos.y()), -30.0, 30.0);      // -Kd * velocityError.y(), -30.0, 30.0);
+    if (lock_y) *forcey += cClamp(K_axis * (posY.y() - hapticPos.y()), -30.0, 30.0);
     else if (!lock_y) *forcey += 0;
 
-    if (lock_z) *forcez += cClamp(K_axis * (posZ.z() - hapticPos.z()), -30.0, 30.0);      // -Kd * velocityError.z(), -30.0, 30.0);
+    if (lock_z) *forcez += cClamp(K_axis * (posZ.z() - hapticPos.z()), -30.0, 30.0);
     else if (!lock_z) *forcez += 0;
 
     return;
@@ -1433,10 +1427,8 @@ void auto_scan(void) {
                 //threshold = maxSignal;
             }
             outFile.flush();
-
             i = 0;
-
-            
+ 
         }
         i++;
         if (scan_x) scan_vector.set(-0.1 * microns, 0, 0);
@@ -1455,25 +1447,24 @@ void draw_pixels(void) {
     // draw a voxel if voltage level reaches a certain value
     if (!scan_z && scan_finished) {
         cColorb color;
-        if (voltageLevel > 0.9 * threshold) {
+        if (voltageLevel > 5 * threshold) {
             color.set(255, 0, 0, 255);  // Opaque Red
         }
-        else if (voltageLevel > 0.7 * threshold) {
+        else if (voltageLevel > 4 * threshold) {
             color.set(255, 165, 0, 200);  // Orange (less opaque)
         }
-        else if (voltageLevel > 0.5 * threshold) {
+        else if (voltageLevel > 3 * threshold) {
             color.set(255, 255, 0, 150);  // Yellow (more transparent)
         }
-        else if (voltageLevel > 0.2 * threshold) {
+        else if (voltageLevel > 2 * threshold) {
             color.set(0, 255, 0, 100);  // Green (even more transparent)
         }
-        else if (voltageLevel > 0.05 * threshold) {
+        else if (voltageLevel > 0.5 * threshold) {
             color.set(255, 255, 255, 50);  // Very transparent white
         }
         else {
             color.set(255, 255, 255, 20);  // Extremely transparent white
         }
-        
         setVoxel(robotPosDes-offset, color);
 
     }

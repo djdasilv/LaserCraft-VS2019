@@ -142,3 +142,48 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
     }
 
 }
+
+cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltage) {
+    static signal3d prev_value(cVector3d(0,0,0), 0);
+
+    //If displacement is too small, ignore it 
+    if ((currentRobotPosition - prev_value.RobotPos).length() < 10 * microns) {
+        return (0, 0, 0);
+    }
+
+    //Do not compute spring force if signal is bellow threshold
+    if (current_voltage < 1) {
+        prev_value.signal_value = 0;
+        return cVector3d(0, 0, 0);
+    }
+
+    double signal_diff;
+    cVector3d position_diff;
+    
+    //Define position difference vector such that its   
+    //magnitude is unit and all components are positive
+    position_diff = cVector3d(  abs(currentRobotPosition.x() - prev_value.RobotPos.x()),
+                                abs(currentRobotPosition.y() - prev_value.RobotPos.y()),
+                                abs(currentRobotPosition.z() - prev_value.RobotPos.z()));
+    
+    if(position_diff.length()!=0) position_diff.normalize();
+
+
+    //If signal at current position is smaller then previous -> move the user back to where they were
+    if (current_voltage < prev_value.signal_value) {
+        signal_diff = (current_voltage - prev_value.signal_value);
+    }
+    else {
+        signal_diff = 0;
+    }
+
+    //Multiply the displacement vector by the signal delta
+    position_diff = signal_diff * position_diff;
+
+
+    //Replace previous values with actual values
+    prev_value.RobotPos = currentRobotPosition;
+    prev_value.signal_value = current_voltage;
+
+    return position_diff;
+}
