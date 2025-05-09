@@ -9,6 +9,10 @@
 using namespace chai3d;
 using namespace std;
 
+#define signal_threshold   0.1 //V
+#define max_signal 5 // V
+#define microns 0.000001 // used to convert meter to microns 
+
 
 class GaussianFilter {
 public:

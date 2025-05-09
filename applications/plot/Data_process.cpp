@@ -2,7 +2,8 @@
 
 #include <numeric>
 
-#define microns 0.000001 // used to convert meter to microns 
+
+
 
 GaussianFilter::GaussianFilter(int window_size, double sigma)
     : window_size(window_size), index(0), filled(false) {
@@ -95,12 +96,13 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
         }
     }
     
-    if (last_values.size() < 3) {
+    if (last_values.size() < 3) 
+    {
         if (isValid)   last_values.push_back(tmp);
         return cVector3d(0, 0, 0);
-       
     }
-    else {
+    else 
+    {
         // Sample voltages at the three points
         double V_p0 = current_voltage;
         double V_p1 = last_values[0].signal_value;
@@ -144,7 +146,7 @@ cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage 
 }
 
 cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltage) {
-    static signal3d prev_value(cVector3d(0,0,0), 0);
+    static signal3d prev_value(currentRobotPosition , current_voltage);
 
     //If displacement is too small, ignore it 
     if ((currentRobotPosition - prev_value.RobotPos).length() < 10 * microns) {
@@ -152,7 +154,7 @@ cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltag
     }
 
     //Do not compute spring force if signal is bellow threshold
-    if (current_voltage < 1) {
+    if (current_voltage < signal_threshold) {
         prev_value.signal_value = 0;
         return cVector3d(0, 0, 0);
     }
@@ -170,7 +172,7 @@ cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltag
 
 
     //If signal at current position is smaller then previous -> move the user back to where they were
-    if (current_voltage < prev_value.signal_value) {
+    if (current_voltage < 0.5*prev_value.signal_value) {
         signal_diff = (current_voltage - prev_value.signal_value);
     }
     else {
@@ -178,12 +180,20 @@ cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltag
     }
 
     //Multiply the displacement vector by the signal delta
-    position_diff = signal_diff * position_diff;
+    position_diff.normalize();
+    position_diff *= cClamp((exp(signal_diff)), 0.0, 5.0);
 
 
     //Replace previous values with actual values
     prev_value.RobotPos = currentRobotPosition;
     prev_value.signal_value = current_voltage;
 
+    //Set vector components to 0 if they are too small
+    for (int i = 0; i<2 ; i++)
+    {
+        if (position_diff(i) < 0.2) {
+            position_diff(i) = 0;
+        }
+    }
     return position_diff;
 }

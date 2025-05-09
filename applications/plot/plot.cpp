@@ -14,8 +14,6 @@
 #include "Data_process.h"
 #include <random>
 
-#define microns 0.000001
-
 using namespace chai3d;
 using namespace std;
 
@@ -454,13 +452,13 @@ int main(int argc, char* argv[])
 
     // create small sphere
 
-    cursorRobotPosDesScan = new cShapeSphere(0.0003);
+    //cursorRobotPosDesScan = new cShapeSphere(0.0003);
 
     // add cursor to world
-    world->addChild(cursorRobotPosDesScan);
+    //world->addChild(cursorRobotPosDesScan);
 
     // set cursor color
-    cursorRobotPosDesScan->m_material->setRed();
+    //cursorRobotPosDesScan->m_material->setRed();
 
     //Is this even useful?
 
@@ -896,7 +894,7 @@ void updateGraphics(void)
     labelGradient->setText("X scan: " + cStr(scan_x) + "  /  " +
         "Y Scan : " + cStr(scan_y) + "  /  " +
         "Z Scan : " + cStr(scan_z) + "/ Voltage: " + cStr(voltageLevel,5) + "  /  " +
-        "dU/dx: " + cStr(gradient.x()) + ", dU/dy: " + cStr(gradient.y()) + ", dU/dz: " + cStr(gradient.z()));
+        "x: " + cStr(signalDiff.x()) + ", y: " + cStr(signalDiff.y()) + ", z: " + cStr(signalDiff.z()));
 
     /////////////////////////////////////////////////////////////////////
     // VOLUME UPDATE
@@ -920,9 +918,9 @@ void updateGraphics(void)
     mutexDevices.release();
 
     // update position of cursor for scanning
-    mutexDevices.acquire();
-    cursorRobotPosDesScan->setLocalPos(robotPosDesScan - offset);
-    mutexDevices.release();
+    //mutexDevices.acquire();
+   // cursorRobotPosDesScan->setLocalPos(robotPosDesScan - offset);
+    //mutexDevices.release();
 
 
     /////////////////////////////////////////////////////////////// //////
@@ -1102,12 +1100,14 @@ void updateSensor(void)
                 dataValue = ADData[i];
             }
             
-            // convert data value to a sensor voltage level
-            voltageLevel = round(100*(5*(dataValue-2048)/1024.0))/100 ;//round(10*cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0))/10;
-            
             //Apply a gaussian filter to smoothen sensor values
-            static GaussianFilter filter(100,100);
+            static GaussianFilter filter(9, 1.03);
             voltageLevel = filter.applyFilter(voltageLevel);
+
+            // convert data value to a sensor voltage level
+            voltageLevel = round(100*cClamp(5.0 * (((double)(dataValue)-2048.0) / 964.0),0.0,5.0))/100;
+            
+            
 
             // compute a haptic damping factor based on laser signal
             double dampingGain = 0.4;
@@ -1175,6 +1175,7 @@ void updateRobotDevice(void)
         }
         
         signalDiff = computeSignalDif(robotPosCur, voltageLevel);
+        //cout << signalDiff << endl;
 
         // compute spring force to move robot toward desired position (robotPosDes) 
         double Kp = 2000;
@@ -1317,7 +1318,7 @@ void updateHapticDevice(void)
                 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-                // compute spring force to resist movement on haptic sidem if robot has not moved to that position
+                // compute spring force to resist movement on haptic side if robot has not moved to that position
                 force = Kp * (robotPosCur - robotPosDes);
 
                 // compute a viscous force based of the laser sensor dat
@@ -1338,8 +1339,9 @@ void updateHapticDevice(void)
 
 
                 // compute a force based on the difference of signal after a given displacement.
-                double Ki = 30;
-                force += Ki*signalDiff;
+                double Ki = 3;
+                cVector3d unitVel(hapticVel/hapticVel.length());
+                force += Ki*signalDiff* unitVel.length();
 
 
             }
@@ -1446,24 +1448,9 @@ void auto_scan(void) {
 void draw_pixels(void) {
     // draw a voxel if voltage level reaches a certain value
     if (!scan_z && scan_finished) {
-        cColorb color;
-        if (voltageLevel > 5 * threshold) {
+        cColorb color(0,0,0,0);
+        if (voltageLevel >  0.1 * 1) {
             color.set(255, 0, 0, 255);  // Opaque Red
-        }
-        else if (voltageLevel > 4 * threshold) {
-            color.set(255, 165, 0, 200);  // Orange (less opaque)
-        }
-        else if (voltageLevel > 3 * threshold) {
-            color.set(255, 255, 0, 150);  // Yellow (more transparent)
-        }
-        else if (voltageLevel > 2 * threshold) {
-            color.set(0, 255, 0, 100);  // Green (even more transparent)
-        }
-        else if (voltageLevel > 0.5 * threshold) {
-            color.set(255, 255, 255, 50);  // Very transparent white
-        }
-        else {
-            color.set(255, 255, 255, 20);  // Extremely transparent white
         }
         setVoxel(robotPosDes-offset, color);
 
