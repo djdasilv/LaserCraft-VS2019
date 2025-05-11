@@ -14,6 +14,16 @@ using namespace std;
 #define microns 0.000001 // used to convert meter to microns 
 
 
+struct signal3d
+{
+    cVector3d RobotPos;
+    double signal_value;
+    signal3d(cVector3d position, double value) {
+        RobotPos = position;
+        signal_value = value;
+    }
+};
+
 class GaussianFilter {
 public:
     /**

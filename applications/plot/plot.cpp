@@ -3,7 +3,6 @@
 //  TELEOPERATION
 //
 //==============================================================================
-
 #include "chai3d.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
@@ -127,6 +126,9 @@ cWorld* world;
 // a camera to render the world in the window display
 cCamera* camera;
 
+// camera intialisation position
+cVector3d cameraPosition(0.03, 0.0, 0.02);
+
 // a light source to illuminate the objects in the world
 cDirectionalLight* light;
 
@@ -144,6 +146,12 @@ cShapeSphere* cursorRobotPosDes;
 
 // a small sphere (cursor) representing the desired position of the robot while scanning
 cShapeSphere* cursorRobotPosDesScan;
+
+// Shared camera state
+double cameraAngle = 0.0;
+double cameraDistance = 0.03;
+double cameraHeight = 0.02;
+cVector3d lookAt = cVector3d(0, 0, 0);
 
 // a virtual voxel like object
 cVoxelObject* object;
@@ -193,6 +201,9 @@ void errorCallback(int error, const char* a_description);
 // callback when a key is pressed
 void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, int a_mods);
 
+// callback for mouse scrollwheel
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+
 // this function renders the scene
 void updateGraphics(void);
 
@@ -223,6 +234,10 @@ void auto_scan(void);
 //Ths fuction draws colored pixels at the robots position 
 // according to the voltage reading signal
 void draw_pixels(void);
+
+//Update camera parameteres according to mouse zoom and arrows
+void updateCamera(void);
+
 
 //==============================================================================
 /*
@@ -366,14 +381,14 @@ int main(int argc, char* argv[])
     world = new cWorld();
 
     // set the background color of the environment
-    world->m_backgroundColor.setBlack();
+    world->m_backgroundColor.setBlueLight();
 
     // create a camera and insert it into the virtual world
     camera = new cCamera(world);
     world->addChild(camera);
-
+  
     // position and orient the camera
-    camera->set(cVector3d(0.03, 0.0, 0.02),    // camera position (eye)
+    camera->set(cameraPosition,    // camera position (eye)
         cVector3d(0.0, 0.0, 0.0),    // look at position (target)
         cVector3d(0.0, 0.0, 1.0));   // direction of the (up) vector
 
@@ -382,6 +397,7 @@ int main(int argc, char* argv[])
 
     // create a directional light source
     light = new cDirectionalLight(world);
+    light->setLocalPos(1.0, 1.0, 2.0);
 
     // insert light source inside world
     world->addChild(light);
@@ -476,8 +492,8 @@ int main(int argc, char* argv[])
     object->setLocalPos(0.0, 0.0, 0.0);
 
     // set the dimensions by assigning the position of the min and max corners
-    object->m_minCorner.set(-0.008, -0.008, -0.008);
-    object->m_maxCorner.set(0.008, 0.008, 0.008);
+    object->m_minCorner.set(-0.016, -0.016, -0.016);
+    object->m_maxCorner.set(0.016, 0.016, 0.016);
 
     // set the texture coordinate at each corner.
     object->m_minTextureCoord.set(0.0, 0.0, 0.0);
@@ -489,6 +505,43 @@ int main(int argc, char* argv[])
     object->setShowBoundaryBox(true);
 
 
+    // ------------------------------------------------------------------------
+    // CREAT WORLD FLOOR 
+    //--------------------------------------------------------------------------
+
+    // Create a new mesh object for the floor
+    cMesh* floor = new cMesh();
+    world->addChild(floor);
+
+    // Size of the floor (length of one side)
+    double floorSize = 0.05;
+
+    // Height at which the floor is placed
+    double floorHeight = -0.017;  // slightly below origin
+
+    // Create four vertices of the floor
+    int v0 = floor->newVertex(-floorSize, -floorSize , floorHeight );
+    int v1 = floor->newVertex(-floorSize, floorSize, floorHeight);
+    int v2 = floor->newVertex(floorSize, floorSize, floorHeight );
+    int v3 = floor->newVertex(floorSize, -floorSize, floorHeight );
+
+    // Create two triangles (a quad made of two triangles)
+    floor->newTriangle(v0, v1, v2);
+    floor->newTriangle(v0, v2, v3);
+
+    // Set material properties (light gray)
+    floor->m_material->setWhite();
+
+    // Compute normals for proper lighting
+    floor->computeAllNormals();
+
+    // Add the floor to the world (as previously done)
+    world->addChild(floor);
+
+    //--------------------------------------------------------------------------
+    // CREATE MESH
+    //--------------------------------------------------------------------------
+    
     //--------------------------------------------------------------------------
     // CREATE VOXEL DATA
     //--------------------------------------------------------------------------
@@ -614,7 +667,7 @@ int main(int argc, char* argv[])
 
     // setup callback when application exits
     atexit(close);
-
+    
 
     //--------------------------------------------------------------------------
     // MAIN GRAPHIC LOOP
@@ -623,6 +676,8 @@ int main(int argc, char* argv[])
     // call window size callback at initialization
     windowSizeCallback(window, width, height);
 
+    //Mouse callback to zoom in or out 
+    glfwSetScrollCallback(window, scrollCallback);
     while (!glfwWindowShouldClose(window))
     {
         // get width and height of window
@@ -849,6 +904,17 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
             glfwWindowHint(GLFW_SAMPLES, 4);
         }
     }
+
+
+    if (a_action == GLFW_PRESS || a_action == GLFW_REPEAT)
+    {
+        if (a_key == GLFW_KEY_LEFT)       cameraAngle -= 0.05;
+        else if (a_key == GLFW_KEY_RIGHT) cameraAngle += 0.05;
+        else if (a_key == GLFW_KEY_UP)    cameraHeight += 0.001;
+        else if (a_key == GLFW_KEY_DOWN)  cameraHeight -= 0.001;
+
+        updateCamera();
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -917,10 +983,6 @@ void updateGraphics(void)
     cursorRobotPosDes->setLocalPos(robotPosDes - offset);
     mutexDevices.release();
 
-    // update position of cursor for scanning
-    //mutexDevices.acquire();
-   // cursorRobotPosDesScan->setLocalPos(robotPosDesScan - offset);
-    //mutexDevices.release();
 
 
     /////////////////////////////////////////////////////////////// //////
@@ -1370,7 +1432,7 @@ void updateHapticDevice(void)
         // release mutex
         mutexDevices.release();
 
-
+        updateCamera();
         //--------------------------------------------------------------------------
         // SEND FORCE TO HAPTIC DEVICE
         //--------------------------------------------------------------------------
@@ -1452,7 +1514,8 @@ void draw_pixels(void) {
         if (voltageLevel >  0.1 * 1) {
             color.set(255, 0, 0, 255);  // Opaque Red
         }
-        setVoxel(robotPosDes-offset, color);
+        cVector3d position(robotPosDes - offset);
+        setVoxel(position, color);
 
     }
 
@@ -1481,4 +1544,33 @@ void reset_pixels() {
     mutexVoxel.release();
 
     flagMarkVolumeForUpdate = true;
+}
+
+ // This function will be called when the user scrolls
+void scrollCallback(GLFWwindow * window, double xoffset, double yoffset)
+    {
+    if (yoffset > 0)
+        cameraDistance *= 0.9;  // Zoom in
+    else if (yoffset < 0)
+        cameraDistance *= 1.1;  // Zoom out
+
+    // Clamp
+    if (cameraDistance < 0.005) cameraDistance = 0.005;
+    if (cameraDistance > 2.0)  cameraDistance = 2.0;
+
+    updateCamera();
+}
+
+
+void updateCamera()
+{
+    double x = cameraDistance * cos(cameraAngle);
+    double y = cameraDistance * sin(cameraAngle); 
+    double z = cameraHeight;
+    
+
+    cVector3d cameraPosition(x, y, z);
+    cVector3d up(0.0, 0.0, 1.0);  // Up vector
+    lookAt = cursorRobotPosDes->getLocalPos();
+    camera->set(cameraPosition, lookAt, up);
 }

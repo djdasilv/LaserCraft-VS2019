@@ -69,15 +69,6 @@ double updateMax(cVector3d position, double voltage,cVector3d& maxPos,bool reset
     return maxVoltage;
 }
 
-struct signal3d
-{
-    cVector3d RobotPos;
-    double signal_value;
-    signal3d(cVector3d position, double value) {
-        RobotPos=position;
-        signal_value = value;
-    }
-};
 
 
 cVector3d computeGradient(cVector3d currentRobotPosition,double current_voltage ) {
@@ -150,7 +141,7 @@ cVector3d computeSignalDif(cVector3d currentRobotPosition, double current_voltag
 
     //If displacement is too small, ignore it 
     if ((currentRobotPosition - prev_value.RobotPos).length() < 10 * microns) {
-        return (0, 0, 0);
+        return cVector3d(0, 0, 0);
     }
 
     //Do not compute spring force if signal is bellow threshold
