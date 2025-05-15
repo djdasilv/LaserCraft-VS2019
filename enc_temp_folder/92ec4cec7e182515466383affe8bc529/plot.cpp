@@ -204,9 +204,6 @@ tetgenio out; // output structure
 cMesh* myMesh;
 
 deque <double> meshPositionsVector;
-
-double area_threshold (0.0009);
-double length_threshold (0.0005);
 //------------------------------------------------------------------------------
 // DECLARED FUNCTIONS
 //------------------------------------------------------------------------------
@@ -1686,16 +1683,17 @@ double triangleArea(const chai3d::cVector3d& a, const chai3d::cVector3d& b, cons
     return area;
 }
 
-
+#define AREA_THRESHOLD 0.0009 
+#define LENGTH_THRESHOLD 0.0005
 
 bool anyEdgeExceedsLength(
     const chai3d::cVector3d& a,
     const chai3d::cVector3d& b,
     const chai3d::cVector3d& c)
 {
-    return ((a - b).length() > length_threshold) ||
-        ((b - c).length() > length_threshold) ||
-        ((c - a).length() > length_threshold);
+    return ((a - b).length() > LENGTH_THRESHOLD) ||
+        ((b - c).length() > LENGTH_THRESHOLD) ||
+        ((c - a).length() > LENGTH_THRESHOLD);
 }
 
 cMesh* createSurfaceMeshFromTetgen(tetgenio& out) {
@@ -1746,7 +1744,7 @@ cMesh* createSurfaceMeshFromTetgen(tetgenio& out) {
             const auto& v2 = vertices[i2];
 
             double area = triangleArea(vertices[i0], vertices[i1], vertices[i2]);
-            if (area <= area_threshold && !anyEdgeExceedsLength(v0, v1, v2)) {
+            if (area <= AREA_THRESHOLD && !anyEdgeExceedsLength(v0, v1, v2)) {
                 mesh->newTriangle(i0, i1, i2);
             }
             //mesh->newTriangle(get<0>(face), get<1>(face), get<2>(face));

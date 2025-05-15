@@ -11,12 +11,20 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Data_process.h" />
+    <ClInclude Include="tetgen.h" />
+    <ClInclude Include="HorseShoe.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="plot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Data_process.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="predicates.cxx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="tetgen.cxx">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
