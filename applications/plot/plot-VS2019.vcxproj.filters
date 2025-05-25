@@ -12,7 +12,7 @@
     </ClInclude>
     <ClInclude Include="Data_process.h" />
     <ClInclude Include="tetgen.h" />
-    <ClInclude Include="HorseShoe.h" />
+    <ClInclude Include="test_sample.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="plot.cpp">

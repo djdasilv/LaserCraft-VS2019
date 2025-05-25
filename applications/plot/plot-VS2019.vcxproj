@@ -21,7 +21,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\external\mcc\include\cbw.h" />
     <ClInclude Include="Data_process.h" />
-    <ClInclude Include="HorseShoe.h" />
+    <ClInclude Include="test_sample.h" />
     <ClInclude Include="tetgen.h" />
   </ItemGroup>
   <ItemGroup>

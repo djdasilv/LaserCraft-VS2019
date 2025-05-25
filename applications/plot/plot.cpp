@@ -18,9 +18,9 @@
 #include <tuple>
 #include <vector>
 #include <algorithm>
-#include <array> // Include array for std::array
+#include <array> // Include array for array
 #include "tetgen.h"
-#include "HorseShoe.h"
+#include "test_sample.h"
 
 using namespace chai3d;
 using namespace std;
@@ -50,7 +50,7 @@ bool scan_x = false;
 bool scan_y = false;
 bool scan_z = false;
 
-chrono::high_resolution_clock::time_point timePointScan0 = chrono::high_resolution_clock::now();
+//chrono::high_resolution_clock::time_point timePointScan0 = chrono::high_resolution_clock::now();
 
 double voltageLevel;
 
@@ -200,13 +200,14 @@ ofstream* outAdress;
 tetgenio in;  // input structure
 
 tetgenio out; // output structure
+tetgenio full_out;
 
-cMesh* myMesh;
+cMesh* myMesh(nullptr);
 
 deque <double> meshPositionsVector;
 
-double area_threshold (0.0009);
-double length_threshold (0.0005);
+double area_threshold (0.0004);
+double length_threshold (0.004);
 //------------------------------------------------------------------------------
 // DECLARED FUNCTIONS
 //------------------------------------------------------------------------------
@@ -250,9 +251,9 @@ void axis_locking(double* forcex, double* forcey, double* forcez);
 // maximum z-coordinate, which corresponds to the surface of the sample
 void auto_scan(void);
 
-//Ths fuction draws colored pixels at the robots position 
-// according to the voltage reading signal
-void draw_pixels(void);
+//Ths fuction adds the current position to the sample vector according to the THG
+//signal and represents the point-cloud
+void add_value(void);
 
 //Update camera parameteres according to mouse zoom and arrows
 void updateCamera(void);
@@ -288,7 +289,7 @@ cVector3d posX, posY, posZ;
 double maxSignal;
 cVector3d maxPosition;
 bool scan_finished(false);
-void reset_pixels();
+void reset_sample();
 cVector3d gradient(0, 0, 0);
 cVector3d signalDiff(0, 0, 0);
 
@@ -315,16 +316,14 @@ int main(int argc, char* argv[])
     cout << "[4] - scale factor 0.50x" << endl;
     cout << "[c] - reset offset" << endl;
     cout << "[f] - Enable/Disable full screen mode" << endl;
-    cout << "[g] - Find first plane of focus on a glass sample" << endl;
     cout << "[x] - Lock translation in x direction" << endl;
     cout << "[y] - Lock translation in y direction" << endl;
     cout << "[z] - Lock translation in z direction" << endl;
-    cout << "[t] - Move to surface of the sample" << endl;
-    cout << "[t] - X-axis Scan" << endl;
-    cout << "[t] - Y-axis scan" << endl;
-    cout << "[t] - Z-axis scan" << endl;
-    cout << "[u] - Draw voxels" << endl;
-    cout << "[r] - Reset all voxels" << endl;
+    cout << "[g] - X-axis Scan" << endl;
+    cout << "[h] - Y-axis scan" << endl;
+    cout << "[j] - Z-axis scan" << endl;
+    cout << "[u] - Render sample" << endl;
+    cout << "[r] - Reset sample render" << endl;
     cout << "[S] - Set new maximum obtained voltage [V]. Default set to 5 V. Can also be found doing a z scan (press[j])" << endl;
     cout << "[q] - Exit application" << endl;
     cout << endl << endl;
@@ -745,20 +744,20 @@ void errorCallback(int a_error, const char* a_description)
 
 void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, int a_mods)
 {
+    //Move robot to max position (currently does not work correctly)
     if (a_key == GLFW_KEY_T)
     {
-        robotPosDes = maxPosition;
-        cout << "Moved to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
-        cout << "Moved to :" << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
-        cout << "Moved to :" << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
+        //robotPosDes = maxPosition;
+        //cout << "Moved to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
+        //cout << "Moved to :" << robotPosCur.x() << " " << robotPosCur.y() << " " << robotPosCur.z() << endl;
+        //cout << "Moved to :" << robotPosDes.x() << " " << robotPosDes.y() << " " << robotPosDes.z() << endl;
 
     }
     //Resets all voxels if R key is pressed
     if (a_key == GLFW_KEY_R && a_action == GLFW_PRESS)
     {
-        reset_pixels();
+        reset_sample();
     }
-
     //Lock X translation
     if (a_key == GLFW_KEY_X && (a_action != GLFW_PRESS))
     {   
@@ -786,14 +785,14 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         return;
     }
 
-    //Approaches sample on z-axis and writes output signal to file
+    //Scans sample on one-axis and writes output signal to file
     //Warning: old file is written over each time this mode is activated
     if ((a_key == GLFW_KEY_G || a_key == GLFW_KEY_H || a_key == GLFW_KEY_J) && (a_action == GLFW_PRESS))
     {
         if (((!scan_x) && a_key == GLFW_KEY_G) || ((!scan_y) && a_key == GLFW_KEY_H) || (!scan_z && a_key == GLFW_KEY_J)) {
             outFile.open("output.csv", std::ios::trunc);
             if (outFile.is_open()) {
-                cVector3d tmp(0,0,0);
+                cVector3d current_position(0,0,0);
                 switch (a_key) {
                     case GLFW_KEY_G:
                         outFile << "Position in x [m],Voltage [V]" << std::endl;
@@ -803,9 +802,12 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                         break;
                     case GLFW_KEY_J:
                         outFile << "Position in z [m],Voltage [V]" << std::endl;
-                        robotDevice->getPosition(tmp);
-                        tmp = robotRot * tmp;
-                        updateMax(tmp , 0, maxPosition, true);
+                        robotDevice->getPosition(current_position);
+                        
+                        // This part is supposed to find the absolute maximum position when doing a z scan but
+                        // does not work correctly
+                        //current_position = robotRot * current_position;
+                        //updateMax(current_position , 0, maxPosition, true);
                         //cout << "Postion update to :" << maxPosition.x() << " " << maxPosition.y() << " " << maxPosition.z() << endl;
                         break;
                     default:
@@ -834,7 +836,8 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
                 break;
         } 
     }
-
+    
+    static bool show(false);
     //Toggles the pixel coloring update
     if ((a_key == GLFW_KEY_U) && (a_action == GLFW_PRESS))
     {
@@ -844,11 +847,13 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         cout << scan_finished << endl;
         unique_ptr<REAL[]> pointlist;
         in.numberofpoints = 5000;
-        // Default mesh shape is a horse shoe for which the 
-        // array is stored in the HorseShoe.h file
+
+        // Default mesh shape is a rectangular cuboid with different sized holes
+        //  for which the array is stored in the test_sample.h file
         in.pointlist = test_5000;
 
-        //Once the sensor sampples enough points this mesh  is computer instead of horse shoe 
+        //Once the sensor sampples enough points this mesh  is computer 
+        //instead of the test model
         if (meshPositionsVector.size() > 12) {
             in.numberofpoints = meshPositionsVector.size();
             pointlist = make_unique<double[]>(meshPositionsVector.size());
@@ -861,7 +866,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         }
         tetrahedralize((char*)"zQ", &in, &out);
         
-        static bool show(false);
         if (show == false) {
             myMesh = createSurfaceMeshFromTetgen(out);
             world->addChild(myMesh);
@@ -871,13 +875,6 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
             world->removeChild(myMesh);
             show = false;
         }
-        //renderTetGenMesh(&out, world);
-    }
-
-    // filter calls that only include a key press
-    if ((a_action != GLFW_PRESS) && (a_action != GLFW_REPEAT))
-    {
-        return;
     }
 
     // option - exit
@@ -914,6 +911,59 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
     if (a_key == GLFW_KEY_C)
     {
         offset = robotPosCur;
+    }
+
+
+    // option - reset offset
+    if (a_key == GLFW_KEY_W)
+    {
+        area_threshold += 0.00001;
+        cout << area_threshold << endl;
+        if (myMesh) {
+            world->removeChild(myMesh);
+            delete myMesh;
+        }
+        myMesh = createSurfaceMeshFromTetgen(out);
+        world->addChild(myMesh);
+
+    }
+    // option - reset offset
+    if (a_key == GLFW_KEY_S)
+    {
+        area_threshold -=0.00001;
+        cout << area_threshold << endl;
+        if (myMesh) {
+            world->removeChild(myMesh);
+            delete myMesh;
+        }
+        myMesh = createSurfaceMeshFromTetgen(out);
+        world->addChild(myMesh);
+
+    }
+    // option - reset offset
+    if (a_key == GLFW_KEY_E)
+    {
+        length_threshold +=0.0001;
+        cout << length_threshold << endl;
+        if (myMesh) {
+            world->removeChild(myMesh);
+            delete myMesh;
+        }
+        myMesh = createSurfaceMeshFromTetgen(out);
+        world->addChild(myMesh);
+    }
+    // option - reset offset
+    if (a_key == GLFW_KEY_D)
+    {
+        length_threshold -=0.0001;
+        cout << length_threshold << endl;
+        if (myMesh) {
+            world->removeChild(myMesh);
+            delete myMesh;
+        }
+        myMesh = createSurfaceMeshFromTetgen(out);
+        world->addChild(myMesh);
+
     }
 
     // option - toggle fullscreen
@@ -960,6 +1010,12 @@ void keyCallback(GLFWwindow* a_window, int a_key, int a_scancode, int a_action, 
         else if (a_key == GLFW_KEY_DOWN)  cameraHeight -= 0.001;
 
         updateCamera();
+    }
+    //Resets all voxels if R key is pressed
+    if (a_key == GLFW_KEY_R && a_action == GLFW_PRESS)
+    {
+        reset_sample();
+        show = false;
     }
 }
 
@@ -1297,7 +1353,7 @@ void updateRobotDevice(void)
         // apply force after taking into account rotation matrix of robot
         robotDevice->setForce(cTranspose(robotRot) * force);
 
-        draw_pixels();
+        add_value();
 
 
         // update frequency counter
@@ -1552,11 +1608,9 @@ void auto_scan(void) {
     return;
 }
 
-//Ths fuction draws colored pixels at the robots position 
-// according to the voltage reading signal
+//Ths fuction adds sampled value to a vector so that the mesh can be computed
 
-void draw_pixels(void) {
-    // draw a voxel if voltage level reaches a certain value
+void add_value(void) {
     cVector3d render_position = robotPosDes - offset;
     if (meshPositionsVector.size() > 1000 && voltageLevel> 0.1) {
         meshPositionsVector.pop_front();
@@ -1571,43 +1625,13 @@ void draw_pixels(void) {
         meshPositionsVector.push_back(render_position.y());
         meshPositionsVector.push_back(render_position.z());
     }
-    if (!scan_z && scan_finished) {
-        cColorb color(0,0,0,0);
-        if (voltageLevel >  0.1 * 1) {
-            color.set(255, 0, 0, 255);  // Opaque Red
-           
-        }
-        cVector3d position(robotPosDes - offset);
-        setVoxel(position, color);
-
-    }
-
+    createSurfaceMeshFromTetgen(out);
 }
 
 //This function resest all drawn pixels 
-void reset_pixels() {
-    // Get volume dimensions
-    int numVoxelX = object->m_texture->m_image->getWidth();
-    int numVoxelY = object->m_texture->m_image->getHeight();
-    int numVoxelZ = object->m_texture->m_image->getImageCount();
-
-    // Loop through all voxels and set them to the reset color
-    for (int x = 0; x < numVoxelX; x++) {
-        for (int y = 0; y < numVoxelY; y++) {
-            for (int z = 0; z < numVoxelZ; z++) {
-                object->m_texture->m_image->setVoxelColor(x, y, z, cColorb(0,0,0,0));
-            }
-        }
-    }
-
+void reset_sample() {
     meshPositionsVector.clear();
-    // Mark the whole volume for update
-    mutexVoxel.acquire();
-    volumeUpdate.enclose(cVector3d(0, 0, 0));
-    volumeUpdate.enclose(cVector3d(numVoxelX - 1, numVoxelY - 1, numVoxelZ - 1));
-    mutexVoxel.release();
-
-    flagMarkVolumeForUpdate = true;
+    if (myMesh) world->removeChild(myMesh);
 }
 
  // This function will be called when the user scrolls
@@ -1639,46 +1663,9 @@ void updateCamera()
     camera->set(cameraPosition, lookAt, up);
 }
 
-/*
-void renderTetGenMesh(tetgenio* out, cWorld* world) {
-    // Create a mesh object in CHAI3D
-    cMesh* mesh = new cMesh();
 
-    // Add vertices to the mesh
-    for (int i = 0; i < out->numberofpoints; i++) {
-        // Extract vertex coordinates
-        double x = out->pointlist[3 * i];      // X-coordinate
-        double y = out->pointlist[3 * i + 1];  // Y-coordinate
-        double z = out->pointlist[3 * i + 2];  // Z-coordinate
-        mesh->newVertex(cVector3d(x, y, z)); // Add the vertex to CHAI3D
-    }
-
-    // Add faces (triangular surfaces of tetrahedra) to the mesh
-    for (int i = 0; i < out->numberoftetrahedra; i++) {
-        int p1 = out->tetrahedronlist[4 * i];      // Index for first vertex
-        int p2 = out->tetrahedronlist[4 * i + 1];  // Index for second vertex
-        int p3 = out->tetrahedronlist[4 * i + 2];  // Index for third vertex
-        int p4 = out->tetrahedronlist[4 * i + 3];  // Index for fourth vertex
-
-        // Add the faces (triangular surfaces of the tetrahedron)
-        mesh->newTriangle(p1, p2, p3);
-        mesh->newTriangle(p1, p2, p4);
-        mesh->newTriangle(p1, p3, p4);
-        mesh->newTriangle(p2, p3, p4);
-    }
-
-    // Apply color or material to the mesh
-    mesh->setUseVertexColors(false);
-    mesh->m_material->setBlueCornflower();
-    mesh->m_material->setShininess(128.0);
-    mesh->setTransparencyLevel(0.001);
-    // Add the mesh to the world
-    world->addChild(mesh);
-}
-*/
-// Helper function to compute the area of a triangle
-double triangleArea(const chai3d::cVector3d& a, const chai3d::cVector3d& b, const chai3d::cVector3d& c) {
-    // Area = 0.5 * |(b - a) x (c - a)|
+//  Function to compute the area of a triangle
+double triangleArea(const cVector3d& a, const cVector3d& b, const cVector3d& c) {
     cVector3d temp1 = b - a;
     cVector3d temp2 = c - a;
     temp1.cross(temp2);
@@ -1687,79 +1674,69 @@ double triangleArea(const chai3d::cVector3d& a, const chai3d::cVector3d& b, cons
 }
 
 
-
-bool anyEdgeExceedsLength(
-    const chai3d::cVector3d& a,
-    const chai3d::cVector3d& b,
-    const chai3d::cVector3d& c)
+// Function to compute if any side of the triangle exceeds the threshold
+bool anyEdgeExceedsLength(const cVector3d& a, const cVector3d& b, const cVector3d& c)
 {
-    return ((a - b).length() > length_threshold) ||
-        ((b - c).length() > length_threshold) ||
-        ((c - a).length() > length_threshold);
+    return ((a-b).length() > length_threshold) ||
+        ((b-c).length() > length_threshold) ||
+        ((c-a).length() > length_threshold);
 }
 
 cMesh* createSurfaceMeshFromTetgen(tetgenio& out) {
-    using Face = std::tuple<int, int, int>;
-    std::map<Face, int> faceCount;
+    using Triangle = tuple<int, int, int>;
+    map<Triangle, int> faceCount;
 
-    // 1. Count faces from all tetrahedra
-    for (int i = 0; i < out.numberoftetrahedra; ++i) {
+    //Count faces from all tetgen tetrahedra
+    for (int i = 0; i < out.numberoftetrahedra; i++) {
         int* tet = &out.tetrahedronlist[i * 4];
         int v[4] = { tet[0], tet[1], tet[2], tet[3] };
 
-        Face faces[4] = {
-            Face(std::min({v[0], v[1], v[2]}), std::max(std::min(v[0], v[1]), std::min(std::max(v[0], v[1]), v[2])), std::max({v[0], v[1], v[2]})),
-            Face(std::min({v[0], v[1], v[3]}), std::max(std::min(v[0], v[1]), std::min(std::max(v[0], v[1]), v[3])), std::max({v[0], v[1], v[3]})),
-            Face(std::min({v[0], v[2], v[3]}), std::max(std::min(v[0], v[2]), std::min(std::max(v[0], v[2]), v[3])), std::max({v[0], v[2], v[3]})),
-            Face(std::min({v[1], v[2], v[3]}), std::max(std::min(v[1], v[2]), std::min(std::max(v[1], v[2]), v[3])), std::max({v[1], v[2], v[3]}))
+        vector<array<int, 3>> faceVerts = {
+        {v[0], v[1], v[2]},
+        {v[0], v[1], v[3]},
+        {v[0], v[2], v[3]},
+        {v[1], v[2], v[3]},
         };
 
-        for (Face& f : faces) {
-            // Sort vertices to ensure consistent representation
-            std::vector<int> verts = { std::get<0>(f), std::get<1>(f), std::get<2>(f) };
-            std::sort(verts.begin(), verts.end());
-            faceCount[{verts[0], verts[1], verts[2]}]++;
+        for (auto& verts : faceVerts) {
+            sort(verts.begin(), verts.end());  // Sort the 3 vertex indices
+            Triangle f = Triangle(verts[0], verts[1], verts[2]);
+            faceCount[f]++;
         }
     }
 
-    // 2. Create the mesh and add vertices
-    auto* mesh = new chai3d::cMesh();
-    std::vector<chai3d::cVector3d> vertices;
+    //Create the cha3d mesh and add vertices
+    auto* mesh = new cMesh();
+    vector<cVector3d> vertices;
     for (int i = 0; i < out.numberofpoints; ++i) {
         double x = out.pointlist[i * 3 + 0];
         double y = out.pointlist[i * 3 + 1];
         double z = out.pointlist[i * 3 + 2];
-        chai3d::cVector3d vert(x, y, z);
+        
+        cVector3d vert(x, y, z);
         mesh->newVertex(vert);
         vertices.push_back(vert);
     }
 
-    // 3. Add only the faces that appear once (surface faces)
+    // Filter triangles that might be noise
     for (const auto& [face, count] : faceCount) {
-        if (true){//count == 1) {
-            int i0 = std::get<0>(face);
-            int i1 = std::get<1>(face);
-            int i2 = std::get<2>(face);
+            int i0 = get<0>(face);
+            int i1 = get<1>(face);
+            int i2 = get<2>(face);
 
             const auto& v0 = vertices[i0];
             const auto& v1 = vertices[i1];
             const auto& v2 = vertices[i2];
 
             double area = triangleArea(vertices[i0], vertices[i1], vertices[i2]);
-            if (area <= area_threshold && !anyEdgeExceedsLength(v0, v1, v2)) {
+            if(area <= area_threshold && !anyEdgeExceedsLength(v0, v1, v2)) {
                 mesh->newTriangle(i0, i1, i2);
             }
-            //mesh->newTriangle(get<0>(face), get<1>(face), get<2>(face));
-        }
     }
 
     // Compute normals for proper lighting
     mesh->computeAllNormals();
-
-    // Optional: Material appearance
-    //mesh->m_material->setShininess(80);
     mesh->m_material->setRedCrimson();
-   // mesh->setTransparencyLevel(0.9);
     mesh->setUseMaterial(true);
 
     return mesh;
