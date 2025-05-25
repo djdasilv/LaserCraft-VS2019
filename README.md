@@ -1,6 +1,9 @@
 # Haptic Interface Program
 
-An interactive program for controlling a robotic system via a haptic device, keyboard, and mouse. Designed for semi-automated sample scanning, real-time visualization, and 3D mesh reconstruction from THG signal data.
+This program enables real-time teleoperation of a **Force Dimension Delta 3 robotic platform** using a **Sigma 7 haptic device** as the master controller. The system is designed to manipulate a **glass or silica sample** in 3D space relative to the **focal point of an optical system** that includes a **near-infrared (NIR) laser** and a **Third Harmonic Generation (THG) sensor**.
+
+When the sample reaches the focal point, THG light is generated and partially reflected into the sensor. The sensor output, a voltage signal proportional to the THG intensity, is captured using a **data acquisition board (DAQ)** and processed in real-time. This feedback is used to generate force cues on the haptic device, guiding the user toward optimal alignment with the laser focus.
+
 
 ---
 
@@ -34,8 +37,7 @@ An interactive program for controlling a robotic system via a haptic device, key
 
 - Arrow keys: Move camera around the center of the sampling cube
 - Mouse wheel: Zoom in/out
-- `.` (dot): Reset robot origin to current position (e.g., under laser)
-
+- 
 ### Sample Rendering
 
 - `U`: Toggle sample rendering  
