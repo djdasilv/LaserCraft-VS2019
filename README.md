@@ -34,7 +34,6 @@ An interactive program for controlling a robotic system via a haptic device, key
 
 - Arrow keys: Move camera around the center of the sampling cube
 - Mouse wheel: Zoom in/out
-- `.` (dot): Reset robot origin to current position (e.g., under laser)
 
 ### Sample Rendering
 
